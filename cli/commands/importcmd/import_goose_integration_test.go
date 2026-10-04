@@ -14,6 +14,7 @@ import (
 
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/postgres"
+	helpers "github.com/dmedovich/queen/tests/integration"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -50,7 +51,7 @@ func TestGooseImportPostgresRoundTrip(t *testing.T) {
 
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
-		Image: "postgres:16-alpine", ExposedPorts: []string{"5432/tcp"},
+		Image: helpers.PostgresImage(), ExposedPorts: []string{"5432/tcp"},
 		Env:        map[string]string{"POSTGRES_USER": "test", "POSTGRES_PASSWORD": "test", "POSTGRES_DB": "testdb"},
 		WaitingFor: wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(90 * time.Second),
 	}

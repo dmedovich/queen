@@ -164,6 +164,9 @@ func (d *Driver) Init(ctx context.Context) error {
 
 // Lock acquires an advisory lock to prevent concurrent migrations.
 func (d *Driver) Lock(ctx context.Context, timeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	d.lockMu.Lock()
 	defer d.lockMu.Unlock()
 

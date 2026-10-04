@@ -1,3 +1,8 @@
+---
+id: ci-cd-example
+title: GitHub Actions Example
+---
+
 # CI/CD with Queen
 
 Queen links migrations into a project-specific Go binary. Build that binary once per release, verify it against the migration sources, and deploy the same artifact that passed the tests.

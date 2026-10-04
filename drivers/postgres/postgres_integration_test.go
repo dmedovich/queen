@@ -6,13 +6,15 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
@@ -52,7 +54,7 @@ func setupPostgresWithDSN(t *testing.T) (*sql.DB, string, func()) {
 	}()
 
 	req := testcontainers.ContainerRequest{
-		Image:        "postgres:16-alpine",
+		Image:        helpers.PostgresImage(),
 		ExposedPorts: []string{"5432/tcp"},
 		Env: map[string]string{
 			"POSTGRES_USER":     "test",
@@ -285,6 +287,11 @@ func TestPostgresIntegration_Lock(t *testing.T) {
 	err := driver.Lock(ctx, 5*time.Second)
 	if err != nil {
 		t.Fatalf("failed to acquire lock: %v", err)
+	}
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	if err := driver.Lock(canceledCtx, 5*time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Lock() with canceled context = %v, want context.Canceled", err)
 	}
 
 	err = driver.Unlock(ctx)
@@ -974,6 +981,100 @@ func TestPostgresIntegration_NonTransactionalFailureNeedsRecovery(t *testing.T) 
 	assertPostgresMigrationRecordCount(t, db, migrationTable, "001", 0)
 }
 
+func TestPostgresIntegration_InterruptedConcurrentIndexNeedsRecovery(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	const history = "queen_migrations_interrupted_index"
+	const body = "queen_interrupted_index_body"
+	const index = "queen_interrupted_index"
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+body)
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+history)
+	mustExecPostgres(t, db, `CREATE TABLE `+body+` (value INT)`)
+	driver := postgres.NewWithTableName(db, history)
+	if err := driver.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	q := queen.NewWithConfig(driver, &queen.Config{TableName: history})
+	q.MustAdd(queen.M{
+		Version: "001", Name: "interrupted_index", NonTransactional: true,
+		UpSQL: `CREATE INDEX CONCURRENTLY ` + index + ` ON ` + body + ` (value)`,
+	})
+
+	blocker, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = blocker.Rollback() }()
+	if _, err := blocker.ExecContext(ctx, `LOCK TABLE `+body+` IN ACCESS EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- q.Up(runCtx) }()
+	markerDeadline := time.After(5 * time.Second)
+	for {
+		var status string
+		err := db.QueryRowContext(ctx, `SELECT status FROM `+history+` WHERE version = '001'`).Scan(&status)
+		if err == nil && status == "applying" {
+			break
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			cancel()
+			t.Fatalf("read non-transactional marker: %v", err)
+		}
+		select {
+		case err := <-result:
+			t.Fatalf("Up() finished before interruption: %v", err)
+		case <-markerDeadline:
+			cancel()
+			t.Fatal("non-transactional marker was not written")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	cancel()
+	if err := <-result; err == nil {
+		t.Fatal("Up() succeeded after index creation was interrupted")
+	}
+	if err := blocker.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	statuses, err := q.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || statuses[0].Status != queen.StatusIncomplete {
+		t.Fatalf("statuses = %+v, want incomplete", statuses)
+	}
+	var indexRef sql.NullString
+	if err := db.QueryRowContext(ctx, `SELECT to_regclass($1)`, index).Scan(&indexRef); err != nil {
+		t.Fatal(err)
+	}
+	if indexRef.Valid {
+		var valid bool
+		if err := db.QueryRowContext(ctx, `SELECT indisvalid FROM pg_index WHERE indexrelid = to_regclass($1)`, index).Scan(&valid); err != nil {
+			t.Fatal(err)
+		}
+		if valid {
+			t.Fatalf("index %s is valid after interrupted creation", index)
+		}
+		// PostgreSQL may leave an invalid index. Remove it before recording
+		// that the migration was not applied and trying again.
+		mustExecPostgres(t, db, `DROP INDEX CONCURRENTLY `+index)
+	}
+	if err := q.ResolveIncomplete(ctx, "001", queen.RecoveryNotApplied); err != nil {
+		t.Fatalf("recover interrupted index: %v", err)
+	}
+	if err := q.Up(ctx); err != nil {
+		t.Fatalf("retry index creation after recovery: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, history, "001", 1)
+	if err := db.QueryRowContext(ctx, `SELECT to_regclass($1)`, index).Scan(&indexRef); err != nil || !indexRef.Valid {
+		t.Fatalf("index after retry = %v, err = %v", indexRef, err)
+	}
+}
+
 func TestPostgresIntegration_SchemaQualifiedMigrationTable(t *testing.T) {
 	db, cleanup := setupPostgres(t)
 	defer cleanup()
@@ -1009,6 +1110,164 @@ func TestPostgresIntegration_MultiStatementSQL(t *testing.T) {
 	}
 	if err := q.Down(ctx, 1); err != nil {
 		t.Fatalf("rollback multi-statement SQL: %v", err)
+	}
+}
+
+func TestPostgresIntegration_ConnectionLossRollsBackBodyAndHistory(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	const history = "queen_migrations_lost_connection"
+	const body = "queen_lost_connection_body"
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+body)
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+history)
+
+	q := queen.NewWithConfig(postgres.NewWithTableName(db, history), &queen.Config{TableName: history})
+	q.MustAdd(queen.M{
+		Version: "001", Name: "lost_connection",
+		UpSQL: `CREATE TABLE ` + body + ` (id INT)`,
+		UpFunc: func(ctx context.Context, tx *sql.Tx) error {
+			var pid int
+			if err := tx.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&pid); err != nil {
+				return err
+			}
+			var terminated bool
+			if err := db.QueryRowContext(ctx, `SELECT pg_terminate_backend($1, 5000)`, pid).Scan(&terminated); err != nil {
+				return err
+			}
+			if !terminated {
+				return errors.New("postgresql did not terminate the migration connection")
+			}
+			return nil
+		},
+	})
+	if err := q.Up(context.Background()); err == nil {
+		t.Fatal("Up() succeeded after its transaction connection was terminated")
+	}
+	if helpers.TableExists(t, db, body) {
+		t.Fatal("migration SQL committed after the connection was lost")
+	}
+	assertPostgresMigrationRecordCount(t, db, history, "001", 0)
+}
+
+func TestPostgresIntegration_TransactionalTimeoutsRollBack(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	const body = "queen_timeout_body"
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+body)
+	mustExecPostgres(t, db, `CREATE TABLE `+body+` (id INT)`)
+
+	t.Run("statement timeout", func(t *testing.T) {
+		const history = "queen_migrations_statement_timeout"
+		mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+history)
+		q := queen.NewWithConfig(postgres.NewWithTableName(db, history), &queen.Config{TableName: history})
+		q.MustAdd(queen.M{
+			Version: "001", Name: "slow_statement",
+			UpSQL:            `INSERT INTO ` + body + ` VALUES (1); SELECT pg_sleep(0.25)`,
+			StatementTimeout: 50 * time.Millisecond,
+		})
+		if err := q.Up(ctx); err == nil {
+			t.Fatal("Up() succeeded despite statement timeout")
+		}
+		assertPostgresMigrationRecordCount(t, db, history, "001", 0)
+		assertPostgresBodyCount(t, db, body, 0)
+	})
+
+	t.Run("SQL lock timeout", func(t *testing.T) {
+		const history = "queen_migrations_sql_lock_timeout"
+		mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+history)
+		driver := postgres.NewWithTableName(db, history)
+		q := queen.NewWithConfig(driver, &queen.Config{TableName: history})
+		q.MustAdd(queen.M{
+			Version: "001", Name: "blocked_insert",
+			UpSQL:          `INSERT INTO ` + body + ` VALUES (1)`,
+			SQLLockTimeout: 50 * time.Millisecond,
+		})
+		// Initialize history before holding an exclusive lock on the body table.
+		if err := driver.Init(ctx); err != nil {
+			t.Fatal(err)
+		}
+		blocker, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = blocker.Rollback() }()
+		if _, err := blocker.ExecContext(ctx, `LOCK TABLE `+body+` IN ACCESS EXCLUSIVE MODE`); err != nil {
+			t.Fatal(err)
+		}
+		if err := q.Up(ctx); err == nil {
+			t.Fatal("Up() succeeded despite SQL lock timeout")
+		}
+		if err := blocker.Rollback(); err != nil {
+			t.Fatal(err)
+		}
+		assertPostgresMigrationRecordCount(t, db, history, "001", 0)
+		assertPostgresBodyCount(t, db, body, 0)
+	})
+}
+
+func TestPostgresIntegration_ExistingHistoryWithLimitedRole(t *testing.T) {
+	db, dsn, cleanup := setupPostgresWithDSN(t)
+	defer cleanup()
+	ctx := context.Background()
+	suffix := time.Now().UnixNano()
+	schema := fmt.Sprintf("queen_priv_%d", suffix)
+	role := fmt.Sprintf("queen_deploy_%d", suffix)
+	history := schema + ".history"
+	body := schema + ".body"
+	mustExecPostgres(t, db, `CREATE SCHEMA `+schema)
+	mustExecPostgres(t, db, `CREATE ROLE `+role+` LOGIN PASSWORD 'queen-test-password'`)
+	defer func() {
+		mustExecPostgres(t, db, `DROP SCHEMA `+schema+` CASCADE`)
+		mustExecPostgres(t, db, `DROP ROLE `+role)
+	}()
+	mustExecPostgres(t, db, `CREATE TABLE `+body+` (id INT)`)
+	if err := postgres.NewWithTableName(db, history).Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	mustExecPostgres(t, db, `GRANT USAGE ON SCHEMA `+schema+` TO `+role)
+	mustExecPostgres(t, db, `GRANT SELECT, INSERT, UPDATE, DELETE ON `+history+`, `+body+` TO `+role)
+	var canCreate bool
+	if err := db.QueryRowContext(ctx, `SELECT has_schema_privilege($1, $2, 'CREATE')`, role, schema).Scan(&canCreate); err != nil {
+		t.Fatal(err)
+	}
+	if canCreate {
+		t.Fatal("deployment role unexpectedly has CREATE privilege")
+	}
+
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.User = role
+	config.Password = "queen-test-password"
+	limitedDB := stdlib.OpenDB(*config)
+	defer func() { _ = limitedDB.Close() }()
+	if err := limitedDB.PingContext(ctx); err != nil {
+		t.Fatalf("connect as deployment role: %v", err)
+	}
+	q := queen.NewWithConfig(postgres.NewWithTableName(limitedDB, history), &queen.Config{TableName: history})
+	q.MustAdd(queen.M{Version: "001", Name: "limited_role", UpSQL: `INSERT INTO ` + body + ` VALUES (1)`, DownSQL: `DELETE FROM ` + body + ` WHERE id = 1`})
+	if err := q.Up(ctx); err != nil {
+		t.Fatalf("Up() with existing history and limited role: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, history, "001", 1)
+	assertPostgresBodyCount(t, db, body, 1)
+	if err := q.Down(ctx, 1); err != nil {
+		t.Fatalf("Down() with limited role: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, history, "001", 0)
+	assertPostgresBodyCount(t, db, body, 0)
+}
+
+func assertPostgresBodyCount(t *testing.T, db *sql.DB, table string, want int) {
+	t.Helper()
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Fatalf("rows in %s = %d, want %d", table, count, want)
 	}
 }
 

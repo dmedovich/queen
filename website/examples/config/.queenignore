@@ -1,0 +1,5 @@
+# Example .queenignore.
+# Format: version # reason
+
+003 # removed before the first production release
+20240524054622 # legacy goose migration intentionally skipped

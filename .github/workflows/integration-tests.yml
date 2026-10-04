@@ -36,8 +36,14 @@ jobs:
       run: go test -v -race ./...
 
   integration-tests-postgres:
-    name: Postgres Integration
+    name: Postgres ${{ matrix.postgres }} Integration
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['15', '16']
+    env:
+      QUEEN_POSTGRES_IMAGE: postgres:${{ matrix.postgres }}-alpine
 
     steps:
     - name: Checkout code
@@ -50,7 +56,7 @@ jobs:
 
     - name: Run Postgres integration tests
       run: make test-postgres
-      timeout-minutes: 10
+      timeout-minutes: 25
 
   integration-tests-mysql:
     name: MySQL Integration

@@ -57,7 +57,7 @@ test-integration:
 
 test-postgres:
 	@echo "==> Running Postgres integration tests (using $(CONTAINER_ENGINE))..."
-	QUEEN_REQUIRE_POSTGRES=1 go test -v -tags=integration -timeout=5m ./drivers/postgres ./cli ./cli/commands/importcmd
+	QUEEN_REQUIRE_POSTGRES=1 go test -v -tags=integration -timeout=15m ./drivers/postgres ./cli ./cli/commands/importcmd
 
 test-mysql:
 	@echo "==> Running MySQL integration tests (using $(CONTAINER_ENGINE))..."

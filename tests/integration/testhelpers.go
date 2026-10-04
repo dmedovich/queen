@@ -5,11 +5,20 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/dmedovich/queen"
 )
+
+// PostgresImage is the container image selected by the integration matrix.
+func PostgresImage() string {
+	if image := os.Getenv("QUEEN_POSTGRES_IMAGE"); image != "" {
+		return image
+	}
+	return "postgres:16-alpine"
+}
 
 // TestMigration is a simple test migration
 var TestMigration001 = queen.M{

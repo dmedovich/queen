@@ -1,0 +1,116 @@
+:root {
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1d4ed8;
+  --ifm-color-primary-darker: #1e40af;
+  --ifm-color-primary-darkest: #1e3a8a;
+  --ifm-color-primary-light: #3b82f6;
+  --ifm-color-primary-lighter: #60a5fa;
+  --ifm-color-primary-lightest: #93c5fd;
+  --ifm-code-font-size: 95%;
+  --ifm-heading-font-weight: 720;
+  --ifm-navbar-shadow: none;
+}
+
+[data-theme='dark'] {
+  --ifm-background-color: #101113;
+  --ifm-background-surface-color: #181a1f;
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #3b82f6;
+  --ifm-color-primary-darker: #2563eb;
+  --ifm-color-primary-darkest: #1d4ed8;
+  --ifm-color-primary-light: #93c5fd;
+  --ifm-color-primary-lighter: #bfdbfe;
+  --ifm-color-primary-lightest: #dbeafe;
+}
+
+.hero {
+  min-height: 72vh;
+  display: flex;
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(16, 17, 19, 0.92), rgba(16, 17, 19, 0.66)),
+    var(--queen-logo-url) right 9vw center / min(38vw, 420px) no-repeat,
+    #101113;
+  color: #f8fafc;
+}
+
+.hero__title {
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  letter-spacing: 0;
+}
+
+.hero__subtitle {
+  max-width: 760px;
+  font-size: 1.3rem;
+  color: #dbeafe;
+}
+
+.heroActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
+.quickGrid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 2rem;
+}
+
+.quickTile {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.quickTile h3 {
+  margin-bottom: 0.4rem;
+}
+
+.footer {
+  padding: 2.5rem 0 1.5rem;
+}
+
+.footer__links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.footer__title {
+  font-size: 0.86rem;
+  letter-spacing: 0;
+  margin-bottom: 0.65rem;
+  text-transform: none;
+}
+
+.footer__item {
+  line-height: 1.75;
+}
+
+.footer__copyright {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.86rem;
+  padding-top: 1rem;
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .hero {
+    min-height: 68vh;
+    background:
+      linear-gradient(180deg, rgba(16, 17, 19, 0.96), rgba(16, 17, 19, 0.78)),
+      var(--queen-logo-url) right 1rem bottom 1rem / 180px no-repeat,
+      #101113;
+  }
+
+  .footer__links {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
