@@ -48,6 +48,8 @@ Requires Go 1.26.3+.
 
 Queen is being hardened for a PostgreSQL-first production release. The public API is small and intended to stay simple, but pre-1.0 releases may still make breaking changes when they improve safety, correctness, or performance.
 
+See the [v0.9.0 changelog](CHANGELOG.md) for upgrade notes and the [v1.0 readiness checklist](docs/v1-readiness.md) for the remaining release checks.
+
 Current stability policy:
 
 - PostgreSQL behavior is the reference contract.

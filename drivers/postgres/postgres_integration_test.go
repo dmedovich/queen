@@ -159,6 +159,77 @@ func TestPostgresIntegration_BasicMigration(t *testing.T) {
 	}
 }
 
+func TestPostgresIntegration_ExistingHistoryUpgrade(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		table string
+		ddl   string
+	}{
+		{
+			name:  "v0.8 history table",
+			table: "queen_upgrade_v08",
+			ddl: `CREATE TABLE queen_upgrade_v08 (
+				version VARCHAR(255) PRIMARY KEY, name VARCHAR(255) NOT NULL,
+				applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				checksum VARCHAR(64) NOT NULL, applied_by VARCHAR(255), duration_ms BIGINT,
+				hostname VARCHAR(255), environment VARCHAR(50),
+				action VARCHAR(20) DEFAULT 'apply', status VARCHAR(20) DEFAULT 'success',
+				error_message TEXT)`,
+		},
+		{
+			name:  "legacy four-column history table",
+			table: "queen_upgrade_legacy",
+			ddl: `CREATE TABLE queen_upgrade_legacy (
+				version VARCHAR(255) PRIMARY KEY, name VARCHAR(255) NOT NULL,
+				applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				checksum VARCHAR(64) NOT NULL)`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := setupPostgres(t)
+			defer cleanup()
+			ctx := context.Background()
+			mustExecPostgres(t, db, `DROP TABLE IF EXISTS queen_upgrade_body`)
+			mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+tc.table)
+			mustExecPostgres(t, db, tc.ddl)
+			mustExecPostgres(t, db, `CREATE TABLE queen_upgrade_body (id INT PRIMARY KEY)`)
+			mustExecPostgres(t, db, `INSERT INTO queen_upgrade_body (id) VALUES (1)`)
+
+			old := queen.M{Version: "001", Name: "existing", UpSQL: `INSERT INTO queen_upgrade_body (id) VALUES (1)`}
+			newMigration := queen.M{Version: "002", Name: "new", UpSQL: `INSERT INTO queen_upgrade_body (id) VALUES (2)`}
+			mustExecPostgres(t, db, `INSERT INTO `+tc.table+` (version, name, checksum) VALUES ($1, $2, $3)`, old.Version, old.Name, old.Checksum())
+
+			q := queen.NewWithConfig(postgres.NewWithTableName(db, tc.table), &queen.Config{TableName: tc.table})
+			q.MustAdd(old)
+			q.MustAdd(newMigration)
+			if err := q.Up(ctx); err != nil {
+				t.Fatalf("Up() on existing history: %v", err)
+			}
+			if err := q.Validate(ctx); err != nil {
+				t.Fatalf("Validate() after upgrade: %v", err)
+			}
+
+			var bodyCount, historyCount int
+			if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM queen_upgrade_body`).Scan(&bodyCount); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+tc.table).Scan(&historyCount); err != nil {
+				t.Fatal(err)
+			}
+			if bodyCount != 2 || historyCount != 2 {
+				t.Fatalf("body rows = %d, history rows = %d; want 2 each", bodyCount, historyCount)
+			}
+			var oldChecksum, oldStatus string
+			if err := db.QueryRowContext(ctx, `SELECT checksum, status FROM `+tc.table+` WHERE version = '001'`).Scan(&oldChecksum, &oldStatus); err != nil {
+				t.Fatal(err)
+			}
+			if oldChecksum != old.Checksum() || oldStatus != "success" {
+				t.Fatalf("old record changed: checksum = %q, status = %q", oldChecksum, oldStatus)
+			}
+		})
+	}
+}
+
 func TestPostgresIntegration_MultipleMigrations(t *testing.T) {
 	db, cleanup := setupPostgres(t)
 	defer cleanup()
