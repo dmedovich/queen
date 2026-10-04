@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func (app *App) statusCmd() *cobra.Command {
@@ -28,7 +28,7 @@ func (app *App) statusCmd() *cobra.Command {
 	}
 }
 
-func countStatuses(statuses []queen.MigrationStatus) (applied, pending, modified int) {
+func countStatuses(statuses []queen.MigrationStatus) (applied, pending, modified, incomplete int) {
 	for _, s := range statuses {
 		switch s.Status {
 		case queen.StatusApplied:
@@ -37,6 +37,8 @@ func countStatuses(statuses []queen.MigrationStatus) (applied, pending, modified
 			pending++
 		case queen.StatusModified:
 			modified++
+		case queen.StatusIncomplete:
+			incomplete++
 		}
 	}
 	return
@@ -77,25 +79,29 @@ func (app *App) outputStatusTable(statuses []queen.MigrationStatus) error {
 		return err
 	}
 
-	applied, pending, modified := countStatuses(statuses)
+	applied, pending, modified, incomplete := countStatuses(statuses)
 	fmt.Printf("\nSummary: %d total, %d applied, %d pending", len(statuses), applied, pending)
 	if modified > 0 {
 		fmt.Printf(", %d modified (warning)", modified)
+	}
+	if incomplete > 0 {
+		fmt.Printf(", %d incomplete (recovery required)", incomplete)
 	}
 	fmt.Println()
 	return nil
 }
 
 func (app *App) outputStatusJSON(statuses []queen.MigrationStatus) error {
-	applied, pending, modified := countStatuses(statuses)
+	applied, pending, modified, incomplete := countStatuses(statuses)
 
 	output := struct {
 		Migrations []queen.MigrationStatus `json:"migrations"`
 		Summary    struct {
-			Total    int `json:"total"`
-			Applied  int `json:"applied"`
-			Pending  int `json:"pending"`
-			Modified int `json:"modified"`
+			Total      int `json:"total"`
+			Applied    int `json:"applied"`
+			Pending    int `json:"pending"`
+			Modified   int `json:"modified"`
+			Incomplete int `json:"incomplete"`
 		} `json:"summary"`
 	}{
 		Migrations: statuses,
@@ -105,6 +111,7 @@ func (app *App) outputStatusJSON(statuses []queen.MigrationStatus) error {
 	output.Summary.Applied = applied
 	output.Summary.Pending = pending
 	output.Summary.Modified = modified
+	output.Summary.Incomplete = incomplete
 
 	return outputJSON(output)
 }

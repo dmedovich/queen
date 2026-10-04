@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // TableLockConfig configures table-based distributed locking.

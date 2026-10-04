@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/cli/tui/live"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/cli/tui/live"
+	"github.com/dmedovich/queen/tap"
 )
 
 func (app *App) upCmd() *cobra.Command {

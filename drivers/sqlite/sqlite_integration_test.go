@@ -12,9 +12,9 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/sqlite"
-	helpers "github.com/yaop-labs/queen/tests/integration"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/sqlite"
+	helpers "github.com/dmedovich/queen/tests/integration"
 )
 
 func setupSQLite(t *testing.T) (*sql.DB, func()) {

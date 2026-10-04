@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	naturalsort "github.com/yaop-labs/queen/internal/sort"
+	naturalsort "github.com/dmedovich/queen/internal/sort"
 )
 
 type IgnoredGap struct {

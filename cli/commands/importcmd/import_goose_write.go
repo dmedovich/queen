@@ -45,7 +45,7 @@ func writeQueenMigration(output string, migration gooseMigration) (string, error
 	filename := fmt.Sprintf("%s_%s.go", queenVersion, migration.name)
 	funcName := gooseRegisterFuncName(queenVersion, migration.name)
 
-	goContent := generateQueenMigrationFile(queenVersion, migration.name, funcName, migration.upSQL, migration.downSQL)
+	goContent := generateQueenMigrationFile(queenVersion, migration.name, funcName, migration.upSQL, migration.downSQL, migration.noTransaction)
 	outputFile := filepath.Join(output, filename)
 
 	if err := writeFileExclusive(outputFile, []byte(goContent)); err != nil {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func migrateUpToVersion(ctx context.Context, q *queen.Queen, targetVersion string, autoYes bool) error {

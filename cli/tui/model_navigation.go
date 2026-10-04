@@ -3,7 +3,7 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen/tap"
 )
 
 //nolint:gocyclo // TUI key routing is centralized so focus/filter/explain states stay ordered.

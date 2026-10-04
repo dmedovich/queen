@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func TestParseSquashVersionArgsAcceptsCommaAndSpaceSeparated(t *testing.T) {

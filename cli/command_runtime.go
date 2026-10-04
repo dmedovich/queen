@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 type queenCommandFunc func(context.Context, *queen.Queen) error

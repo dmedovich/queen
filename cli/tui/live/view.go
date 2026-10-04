@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen/tap"
 )
 
 func (m *model) View() string {

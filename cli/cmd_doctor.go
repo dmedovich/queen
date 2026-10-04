@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 const (
@@ -74,6 +74,7 @@ func collectDoctorResults(ctx context.Context, q *queen.Queen, opts doctorOption
 
 	results = append(results, checkDatabaseConnection(ctx, q))
 	results = append(results, checkMigrationTable(ctx, q))
+	results = append(results, checkIncompleteMigrations(ctx, q))
 	results = append(results, checkChecksums(ctx, q))
 
 	if !opts.deep {

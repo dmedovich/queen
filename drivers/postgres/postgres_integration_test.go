@@ -16,9 +16,9 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/postgres"
-	helpers "github.com/yaop-labs/queen/tests/integration"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/postgres"
+	helpers "github.com/dmedovich/queen/tests/integration"
 )
 
 func setupPostgres(t *testing.T) (*sql.DB, func()) {
@@ -44,6 +44,9 @@ func setupPostgresWithDSN(t *testing.T) (*sql.DB, string, func()) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			if os.Getenv("QUEEN_REQUIRE_POSTGRES") == "1" {
+				t.Fatalf("testcontainers runtime unavailable: %v", r)
+			}
 			t.Skipf("testcontainers runtime unavailable: %v", r)
 		}
 	}()
@@ -68,6 +71,9 @@ func setupPostgresWithDSN(t *testing.T) (*sql.DB, string, func()) {
 	})
 	if err != nil {
 		if isContainerRuntimeUnavailable(err) {
+			if os.Getenv("QUEEN_REQUIRE_POSTGRES") == "1" {
+				t.Fatalf("testcontainers runtime unavailable: %v", err)
+			}
 			t.Skipf("testcontainers runtime unavailable: %v", err)
 		}
 		t.Fatalf("failed to start postgres container: %v", err)
@@ -799,6 +805,140 @@ func TestPostgresIntegration_ProductionInvariants(t *testing.T) {
 			t.Fatalf("q.Close() closed or broke caller-owned pgxpool: %v", err)
 		}
 	})
+
+	t.Run("migration works with one database connection", func(t *testing.T) {
+		const migrationTable = "queen_migrations_one_connection"
+		const bodyTable = "one_connection_body"
+		mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+bodyTable)
+		mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+migrationTable)
+
+		oneConnDB, err := sql.Open("pgx", dsn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = oneConnDB.Close() }()
+		oneConnDB.SetMaxOpenConns(1)
+
+		q := queen.NewWithConfig(postgres.NewWithTableName(oneConnDB, migrationTable),
+			&queen.Config{TableName: migrationTable})
+		q.MustAdd(queen.M{
+			Version: "001", Name: "one_connection",
+			UpSQL: `CREATE TABLE one_connection_body (id INT PRIMARY KEY)`,
+		})
+		operationCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := q.Up(operationCtx); err != nil {
+			t.Fatalf("Up() with one connection failed: %v", err)
+		}
+		if !helpers.TableExists(t, db, bodyTable) {
+			t.Fatal("migration body table does not exist")
+		}
+		assertPostgresMigrationRecordCount(t, db, migrationTable, "001", 1)
+	})
+}
+
+func TestPostgresIntegration_NonTransactionalIndex(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	db.SetMaxOpenConns(1)
+	ctx := context.Background()
+	const migrationTable = "queen_migrations_concurrent_index"
+	const indexName = "queen_concurrent_index_test"
+	mustExecPostgres(t, db, `DROP INDEX IF EXISTS `+indexName)
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS queen_concurrent_index_body`)
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+migrationTable)
+	mustExecPostgres(t, db, `CREATE TABLE queen_concurrent_index_body (value INT)`)
+
+	q := queen.NewWithConfig(postgres.NewWithTableName(db, migrationTable), &queen.Config{TableName: migrationTable})
+	q.MustAdd(queen.M{
+		Version: "001", Name: "concurrent_index", NonTransactional: true,
+		UpSQL:          `CREATE INDEX CONCURRENTLY queen_concurrent_index_test ON queen_concurrent_index_body (value)`,
+		DownSQL:        `DROP INDEX CONCURRENTLY queen_concurrent_index_test`,
+		SQLLockTimeout: time.Second, StatementTimeout: 10 * time.Second,
+	})
+	if err := q.Up(ctx); err != nil {
+		t.Fatalf("apply concurrent index: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, migrationTable, "001", 1)
+	var index sql.NullString
+	if err := db.QueryRow(`SELECT to_regclass($1)`, indexName).Scan(&index); err != nil || !index.Valid {
+		t.Fatalf("index after apply = %v, err = %v", index, err)
+	}
+	if err := q.Down(ctx, 1); err != nil {
+		t.Fatalf("drop concurrent index: %v", err)
+	}
+	if err := db.QueryRow(`SELECT to_regclass($1)`, indexName).Scan(&index); err != nil || index.Valid {
+		t.Fatalf("index after rollback = %v, err = %v", index, err)
+	}
+	assertPostgresMigrationRecordCount(t, db, migrationTable, "001", 0)
+}
+
+func TestPostgresIntegration_NonTransactionalFailureNeedsRecovery(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	const migrationTable = "queen_migrations_failed_concurrent_index"
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+migrationTable)
+	q := queen.NewWithConfig(postgres.NewWithTableName(db, migrationTable), &queen.Config{TableName: migrationTable})
+	q.MustAdd(queen.M{
+		Version: "001", Name: "bad_concurrent_index", NonTransactional: true,
+		UpSQL: `CREATE INDEX CONCURRENTLY queen_bad_index ON queen_missing_index_table (id)`,
+	})
+	if err := q.Up(ctx); err == nil {
+		t.Fatal("expected SQL failure")
+	}
+	statuses, err := q.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || statuses[0].Status != queen.StatusIncomplete {
+		t.Fatalf("statuses = %+v, want incomplete", statuses)
+	}
+	if err := q.Up(ctx); !errors.Is(err, queen.ErrIncompleteMigration) {
+		t.Fatalf("second Up() error = %v, want ErrIncompleteMigration", err)
+	}
+	if err := q.ResolveIncomplete(ctx, "001", queen.RecoveryNotApplied); err != nil {
+		t.Fatalf("resolve failed index as not applied: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, migrationTable, "001", 0)
+}
+
+func TestPostgresIntegration_SchemaQualifiedMigrationTable(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	const schema = "queen_integration_schema"
+	const table = schema + ".migration_history"
+	mustExecPostgres(t, db, `CREATE SCHEMA IF NOT EXISTS `+schema)
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+table)
+	q := queen.NewWithConfig(postgres.NewWithTableName(db, table), &queen.Config{TableName: table})
+	q.MustAdd(queen.M{Version: "001", Name: "schema_table", UpSQL: `CREATE TABLE ` + schema + `.migration_body (id INT)`, DownSQL: `DROP TABLE ` + schema + `.migration_body`})
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+schema+`.migration_body`)
+	if err := q.Up(ctx); err != nil {
+		t.Fatalf("apply using qualified history table: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, table, "001", 1)
+	if err := q.Down(ctx, 1); err != nil {
+		t.Fatalf("rollback using qualified history table: %v", err)
+	}
+	assertPostgresMigrationRecordCount(t, db, table, "001", 0)
+}
+
+func TestPostgresIntegration_MultiStatementSQL(t *testing.T) {
+	db, cleanup := setupPostgres(t)
+	defer cleanup()
+	ctx := context.Background()
+	const migrationTable = "queen_migrations_sql_script"
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS queen_sql_script_body`)
+	mustExecPostgres(t, db, `DROP TABLE IF EXISTS `+migrationTable)
+	q := queen.NewWithConfig(postgres.NewWithTableName(db, migrationTable), &queen.Config{TableName: migrationTable})
+	q.MustAdd(queen.M{Version: "001", Name: "sql_script", UpSQL: `CREATE TABLE queen_sql_script_body (id INT); INSERT INTO queen_sql_script_body VALUES (1);`, DownSQL: `DELETE FROM queen_sql_script_body; DROP TABLE queen_sql_script_body;`})
+	if err := q.Up(ctx); err != nil {
+		t.Fatalf("apply multi-statement SQL: %v", err)
+	}
+	if err := q.Down(ctx, 1); err != nil {
+		t.Fatalf("rollback multi-statement SQL: %v", err)
+	}
 }
 
 func mustExecPostgres(t *testing.T, db *sql.DB, query string, args ...any) {

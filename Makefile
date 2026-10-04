@@ -53,11 +53,11 @@ test-unit: test
 test-integration:
 	@echo "==> Running integration tests (using $(CONTAINER_ENGINE))..."
 	@echo "    This will download container images on first run (~500MB)"
-	go test -v -tags=integration -timeout=15m ./drivers/postgres ./drivers/mysql ./drivers/sqlite ./drivers/cockroachdb ./drivers/clickhouse ./drivers/mssql ./tests/integration
+	go test -v -tags=integration -timeout=15m ./drivers/postgres ./drivers/mysql ./drivers/sqlite ./drivers/cockroachdb ./drivers/clickhouse ./drivers/mssql ./cli ./cli/commands/importcmd ./tests/integration
 
 test-postgres:
 	@echo "==> Running Postgres integration tests (using $(CONTAINER_ENGINE))..."
-	go test -v -tags=integration -timeout=5m ./drivers/postgres
+	QUEEN_REQUIRE_POSTGRES=1 go test -v -tags=integration -timeout=5m ./drivers/postgres ./cli ./cli/commands/importcmd
 
 test-mysql:
 	@echo "==> Running MySQL integration tests (using $(CONTAINER_ENGINE))..."

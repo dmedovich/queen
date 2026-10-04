@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/sqlite"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/sqlite"
 )
 
 func TestBaselineWorkflowRecordsPendingMigrationsInSQLite(t *testing.T) {

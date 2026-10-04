@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func TestIsValidMigrationName(t *testing.T) {
@@ -163,7 +163,7 @@ func TestGenerateSQLTemplate(t *testing.T) {
 	// Check required parts
 	checks := []string{
 		"package migrations",
-		`import "github.com/yaop-labs/queen"`,
+		`import "github.com/dmedovich/queen"`,
 		"Migration001CreateUsers",
 		`Version: "001"`,
 		`Name:    "create_users"`,
@@ -191,7 +191,7 @@ func TestGenerateGoTemplate(t *testing.T) {
 		"package migrations",
 		`"context"`,
 		`"database/sql"`,
-		`"github.com/yaop-labs/queen"`,
+		`"github.com/dmedovich/queen"`,
 		"Migration001MigrateData",
 		`Version:        "001"`,
 		`Name:           "migrate_data"`,

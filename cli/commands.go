@@ -32,6 +32,8 @@ func (app *App) addGlobalFlags() {
 	flags.BoolVar(&app.config.Yes, "yes", false, "Automatic yes to prompts (for CI/CD)")
 	flags.BoolVar(&app.config.JSON, "json", false, "Output in JSON format")
 	flags.BoolVar(&app.config.Verbose, "verbose", false, "Verbose output")
+	flags.BoolVar(&app.config.AllowUnknownApplied, "allow-unknown-applied", false, "Allow applied versions missing from this process's migration registry")
+	flags.BoolVar(&app.config.AllowOutOfOrder, "allow-out-of-order", false, "Allow applying an older version after a newer version")
 }
 
 func (app *App) addCommands() {
@@ -70,6 +72,7 @@ func (app *App) inspectionCommands() []*cobra.Command {
 		app.diffCmd(),
 		app.doctorCmd(),
 		app.checkCmd(),
+		app.verifyRegistryCmd(),
 	}
 }
 
@@ -78,6 +81,8 @@ func (app *App) maintenanceCommands() []*cobra.Command {
 		app.gapCmd(),
 		app.squashCmd(),
 		app.baselineCmd(),
+		app.recoverCmd(),
+		app.adoptGooseCmd(),
 		app.importCmd(),
 	}
 }

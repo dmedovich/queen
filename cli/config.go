@@ -5,16 +5,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 	"gopkg.in/yaml.v3"
 )
 
 // Config holds all configuration options for the CLI.
 type Config struct {
-	Driver      string        `yaml:"driver"`
-	DSN         string        `yaml:"dsn"`
-	Table       string        `yaml:"table"`
-	LockTimeout time.Duration `yaml:"lock_timeout"`
+	Driver              string        `yaml:"driver"`
+	DSN                 string        `yaml:"dsn"`
+	Table               string        `yaml:"table"`
+	LockTimeout         time.Duration `yaml:"lock_timeout"`
+	AllowUnknownApplied bool          `yaml:"allow_unknown_applied"`
+	AllowOutOfOrder     bool          `yaml:"allow_out_of_order"`
 
 	UseConfig        bool   `yaml:"-"`
 	Env              string `yaml:"-"`

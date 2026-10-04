@@ -2,11 +2,12 @@ package cli
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // RegisterFunc is a function that registers migrations with Queen.
@@ -49,7 +50,27 @@ func newApp(register RegisterFunc, dbOpener DBOpener) *App {
 
 func (app *App) execute() {
 	if err := app.rootCmd.Execute(); err != nil {
+		var exitErr *exitCodeError
+		if errors.As(err, &exitErr) {
+			if !exitErr.quiet {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", exitErr)
+			}
+			os.Exit(exitErr.code)
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+type exitCodeError struct {
+	code  int
+	quiet bool
+	cause error
+}
+
+func (e *exitCodeError) Error() string {
+	if e.cause != nil {
+		return e.cause.Error()
+	}
+	return fmt.Sprintf("check failed with exit code %d", e.code)
 }

@@ -26,7 +26,7 @@ func createMigrationsFile(path string, _ string) error {
 	content := `package migrations
 
 import (
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // Register wires this project's migrations into Queen.
@@ -49,7 +49,7 @@ func createExampleMigration(path string) error {
 	content := `package migrations
 
 import (
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // Register001InitialSchema adds the first schema migration.
@@ -79,7 +79,7 @@ func createMainFile(path string, migrationsDir string) error {
 	content := fmt.Sprintf(`package main
 
 import (
-	"github.com/yaop-labs/queen/cli"
+	"github.com/dmedovich/queen/cli"
 
 	"yourmodule/%s"
 

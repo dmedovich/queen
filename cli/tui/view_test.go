@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/tap"
 )
 
 func TestCockpitThreePaneLayoutFitsWidth(t *testing.T) {

@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/clickhouse"
-	"github.com/yaop-labs/queen/drivers/cockroachdb"
-	"github.com/yaop-labs/queen/drivers/mssql"
-	"github.com/yaop-labs/queen/drivers/mysql"
-	"github.com/yaop-labs/queen/drivers/postgres"
-	"github.com/yaop-labs/queen/drivers/sqlite"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/clickhouse"
+	"github.com/dmedovich/queen/drivers/cockroachdb"
+	"github.com/dmedovich/queen/drivers/mssql"
+	"github.com/dmedovich/queen/drivers/mysql"
+	"github.com/dmedovich/queen/drivers/postgres"
+	"github.com/dmedovich/queen/drivers/sqlite"
 )
 
 const (
@@ -51,24 +51,29 @@ func getSQLDriverName(driverName string) string {
 }
 
 func (app *App) createDriver(db *sql.DB) (queen.Driver, error) {
+	tableName := app.config.Table
+	if tableName == "" {
+		tableName = DefaultTableName
+	}
+
 	switch app.config.Driver {
 	case DriverPostgres, DriverPostgreSQL, "pgx":
-		return postgres.New(db), nil
+		return postgres.NewWithTableName(db, tableName), nil
 
 	case "mysql":
-		return mysql.New(db), nil
+		return mysql.NewWithTableName(db, tableName), nil
 
 	case "sqlite", "sqlite3":
-		return sqlite.New(db), nil
+		return sqlite.NewWithTableName(db, tableName), nil
 
 	case "clickhouse":
-		return clickhouse.New(db)
+		return clickhouse.NewWithTableName(db, tableName)
 
 	case DriverCockroach:
-		return cockroachdb.New(db)
+		return cockroachdb.NewWithTableName(db, tableName)
 
 	case DriverMSSQL, DriverSQLServer:
-		return mssql.New(db), nil
+		return mssql.NewWithTableName(db, tableName), nil
 
 	default:
 		return nil, fmt.Errorf(

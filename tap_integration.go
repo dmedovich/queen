@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"time"
 
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen/tap"
 )
 
 func (q *Queen) emitStart(m *Migration, dir tap.Direction, startedAt time.Time) {

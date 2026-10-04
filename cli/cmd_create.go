@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func (app *App) createCmd() *cobra.Command {
@@ -36,6 +36,11 @@ func (app *App) createCmd() *cobra.Command {
 
 			filename := migrationFilename(nextVersion, name)
 			variableName := migrationVariableName(nextVersion, name)
+			registryPath := "migrations/migrations.go"
+			updatedRegistry, autoRegister, err := prepareRegistration(registryPath, variableName)
+			if err != nil {
+				return err
+			}
 
 			var content string
 			switch migrationType {
@@ -51,15 +56,26 @@ func (app *App) createCmd() *cobra.Command {
 				return fmt.Errorf("failed to create migrations directory: %w", err)
 			}
 
-			if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+			if err := writeFileExclusive(filename, []byte(content)); err != nil {
 				return fmt.Errorf("failed to create migration file: %w", err)
+			}
+			if autoRegister {
+				if err := replaceRegistry(registryPath, updatedRegistry); err != nil {
+					_ = os.Remove(filename)
+					return fmt.Errorf("register migration: %w", err)
+				}
 			}
 
 			fmt.Printf("Created migration file: %s\n\n", filename)
+			if autoRegister {
+				fmt.Printf("Registered %s in %s\n\n", variableName, registryPath)
+			}
 			fmt.Println("Next steps:")
 			fmt.Printf("1. Edit %s and add your migration logic\n", filename)
-			fmt.Println("2. Add this line to migrations/register.go:")
-			fmt.Printf("\n   q.MustAdd(%s)\n\n", variableName)
+			if !autoRegister {
+				fmt.Println("2. Add this migration to your project's Register function:")
+				fmt.Printf("\n   q.MustAdd(%s)\n\n", variableName)
+			}
 
 			return nil
 		},

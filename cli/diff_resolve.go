@@ -1,19 +1,20 @@
 package cli
 
 import (
+	"slices"
 	"fmt"
 	"strings"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // resolveVersion resolves special version keywords to actual versions.
 func resolveVersion(version string, statuses []queen.MigrationStatus) (string, error) {
 	switch version {
 	case "current":
-		for i := len(statuses) - 1; i >= 0; i-- {
-			if statuses[i].Status == queen.StatusApplied {
-				return statuses[i].Version, nil
+		for _, statuse := range slices.Backward(statuses) {
+			if statuse.Status == queen.StatusApplied {
+				return statuse.Version, nil
 			}
 		}
 		return "", fmt.Errorf("no migrations applied yet")

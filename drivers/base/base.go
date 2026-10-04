@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // Config contains configuration for the base driver.
@@ -24,8 +24,14 @@ type Driver struct {
 	Config    Config
 }
 
-type execContext interface {
+// Execer is the subset of sql.DB and sql.Conn used to change migration history.
+type Execer interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+// Queryer is the subset of sql.DB and sql.Conn used to read migration history.
+type Queryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
 // SQLDB exposes the underlying database handle for optional diagnostics.
@@ -58,6 +64,11 @@ func (d *Driver) Close() error {
 
 // GetApplied returns all applied migrations sorted by applied_at.
 func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
+	return GetApplied(ctx, d, d.DB)
+}
+
+// GetApplied reads migration history through a specific database connection.
+func GetApplied(ctx context.Context, d *Driver, querier Queryer) ([]queen.Applied, error) {
 	query := fmt.Sprintf(`
 		SELECT version, name, applied_at, checksum,
 		       applied_by, duration_ms, hostname, environment,
@@ -66,7 +77,7 @@ func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 		ORDER BY applied_at ASC
 	`, d.Config.QuoteIdentifier(d.TableName))
 
-	rows, err := d.DB.QueryContext(ctx, query)
+	rows, err := querier.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -132,16 +143,17 @@ func (d *Driver) GetApplied(ctx context.Context) ([]queen.Applied, error) {
 
 // Record marks a migration as applied in the database.
 func (d *Driver) Record(ctx context.Context, m *queen.Migration, meta *queen.MigrationMetadata) error {
-	return d.record(ctx, d.DB, m, meta)
+	return RecordOn(ctx, d, d.DB, m, meta)
 }
 
 // RecordTx marks a migration as applied using tx. Concrete drivers can expose
 // this through queen.TransactionalRecorder when their database supports it.
 func RecordTx(ctx context.Context, d *Driver, tx *sql.Tx, m *queen.Migration, meta *queen.MigrationMetadata) error {
-	return d.record(ctx, tx, m, meta)
+	return RecordOn(ctx, d, tx, m, meta)
 }
 
-func (d *Driver) record(ctx context.Context, execer execContext, m *queen.Migration, meta *queen.MigrationMetadata) error {
+// RecordOn records a migration through a specific database connection.
+func RecordOn(ctx context.Context, d *Driver, execer Execer, m *queen.Migration, meta *queen.MigrationMetadata) error {
 	query := fmt.Sprintf(`
 			INSERT INTO %s (version, name, checksum, applied_by, duration_ms, hostname, environment, action, status, error_message)
 			VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -196,16 +208,17 @@ func (d *Driver) record(ctx context.Context, execer execContext, m *queen.Migrat
 
 // Remove removes a migration record from the database.
 func (d *Driver) Remove(ctx context.Context, version string) error {
-	return d.remove(ctx, d.DB, version)
+	return RemoveOn(ctx, d, d.DB, version)
 }
 
 // RemoveTx removes a migration record using tx. Concrete drivers can expose
 // this through queen.TransactionalRecorder when their database supports it.
 func RemoveTx(ctx context.Context, d *Driver, tx *sql.Tx, version string) error {
-	return d.remove(ctx, tx, version)
+	return RemoveOn(ctx, d, tx, version)
 }
 
-func (d *Driver) remove(ctx context.Context, execer execContext, version string) error {
+// RemoveOn removes a migration through a specific database connection.
+func RemoveOn(ctx context.Context, d *Driver, execer Execer, version string) error {
 	query := fmt.Sprintf(`
 			DELETE FROM %s WHERE version = %s
 		`,

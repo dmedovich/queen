@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func outputLogTable(applied []queen.Applied, withDuration, withMeta bool) {

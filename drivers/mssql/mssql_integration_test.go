@@ -13,9 +13,9 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/mssql"
-	helpers "github.com/yaop-labs/queen/tests/integration"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/mssql"
+	helpers "github.com/dmedovich/queen/tests/integration"
 )
 
 func setupMSSQL(t *testing.T) (*sql.DB, func()) {

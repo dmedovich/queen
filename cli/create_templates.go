@@ -18,7 +18,7 @@ func generateSQLTemplate(version, name, variableName string) string {
 
 	return fmt.Sprintf(`package migrations
 
-import "github.com/yaop-labs/queen"
+import "github.com/dmedovich/queen"
 
 // %s %s
 var %s = queen.M{
@@ -47,7 +47,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // %s %s

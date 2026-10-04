@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,15 +45,39 @@ func TestInitializeProjectGeneratedFilesAreUsable(t *testing.T) {
 
 go 1.26.3
 
-replace github.com/yaop-labs/queen => `+repoRoot+`
+replace github.com/dmedovich/queen => `+repoRoot+`
 
-require github.com/yaop-labs/queen v0.0.0
+require github.com/dmedovich/queen v0.0.0
 `), 0644); err != nil {
 		t.Fatalf("write temp go.mod: %v", err)
 	}
 
 	runGeneratedProjectCommand(t, "go", "mod", "tidy")
 	runGeneratedProjectCommand(t, "go", "test", "./...")
+	runGeneratedProjectCommand(t, "go", "build", "-o", "migrate", "./cmd/migrate")
+	check := exec.Command("./migrate", "check", "--json")
+	check.Env = append(os.Environ(), "QUEEN_DRIVER=", "QUEEN_DSN=")
+	checkOutput, checkErr := check.CombinedOutput()
+	var exitErr *exec.ExitError
+	if !errors.As(checkErr, &exitErr) || exitErr.ExitCode() != 2 {
+		t.Fatalf("check process exit = %v, want code 2; output=%s", checkErr, checkOutput)
+	}
+	var checkResult checkJSONResult
+	if err := json.Unmarshal(checkOutput, &checkResult); err != nil || checkResult.ExitCode != 2 {
+		t.Fatalf("check process JSON = %+v, err=%v; output=%s", checkResult, err, checkOutput)
+	}
+	runGeneratedProjectCommand(t, "go", "run", "./cmd/migrate", "verify-registry")
+	runGeneratedProjectCommand(t, "go", "run", "./cmd/migrate", "create", "add_email")
+	runGeneratedProjectCommand(t, "go", "run", "./cmd/migrate", "verify-registry")
+	if err := os.WriteFile(filepath.Join("migrations", "003_unregistered.go"), []byte(generateSQLTemplate("003", "unregistered", "Migration003Unregistered")), 0644); err != nil {
+		t.Fatal(err)
+	}
+	verify := exec.Command("go", "run", "./cmd/migrate", "verify-registry")
+	verify.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	output, err := verify.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "unregistered source migrations: [003") {
+		t.Fatalf("verify-registry should reject an unregistered migration: err=%v output=%s", err, output)
+	}
 
 	app := &App{
 		config: &Config{

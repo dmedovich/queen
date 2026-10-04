@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/microsoft/go-mssqldb"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/mssql"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/mssql"
 )
 
 // Example demonstrates basic usage of the MS SQL Server driver.

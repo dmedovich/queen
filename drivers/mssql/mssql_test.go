@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/base"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/base"
 )
 
 // TestQuoteIdentifier tests the identifier quoting function for MSSQL

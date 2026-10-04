@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 type squashOptions struct {
@@ -175,7 +175,7 @@ func writeSquashSQLBlock(b *strings.Builder, version, name, sql string) {
 func generateSquashedMigrationTemplate(version, name, variableName, upSQL, downSQL string) string {
 	return fmt.Sprintf(`package migrations
 
-import "github.com/yaop-labs/queen"
+import "github.com/dmedovich/queen"
 
 var %s = queen.M{
 	Version: "%s",

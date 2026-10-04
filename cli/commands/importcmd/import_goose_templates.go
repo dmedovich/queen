@@ -24,20 +24,24 @@ func gooseRegisterFuncName(version, name string) string {
 	return funcName
 }
 
-func generateQueenMigrationFile(version, name, funcName, upSQL, downSQL string) string {
+func generateQueenMigrationFile(version, name, funcName, upSQL, downSQL string, noTransaction bool) string {
 	upSQL = strings.ReplaceAll(upSQL, "`", "` + \"`\" + `")
 	downSQL = strings.ReplaceAll(downSQL, "`", "` + \"`\" + `")
+	nonTransactionalField := ""
+	if noTransaction {
+		nonTransactionalField = "\n\t\tNonTransactional: true,"
+	}
 
 	return fmt.Sprintf(`package migrations
 
 import (
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func %s(q *queen.Queen) {
 	q.MustAdd(queen.M{
 		Version: "%s",
-		Name:    "%s",
+		Name:    "%s",%s
 		UpSQL: `+"`"+`
 %s
 		`+"`"+`,
@@ -46,14 +50,14 @@ func %s(q *queen.Queen) {
 		`+"`"+`,
 	})
 }
-`, funcName, version, name, upSQL, downSQL)
+`, funcName, version, name, nonTransactionalField, upSQL, downSQL)
 }
 
 func generateRegistrationFile(registrationCalls string) string {
 	return fmt.Sprintf(`package migrations
 
 import (
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func Register(q *queen.Queen) {

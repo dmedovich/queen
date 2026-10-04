@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/tap"
 )
 
 // initPanels constructs the bubbles widgets once. Sizes are placeholder until

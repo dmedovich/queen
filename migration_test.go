@@ -6,6 +6,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestMigrationValidate(t *testing.T) {
@@ -67,6 +68,21 @@ func TestMigrationValidate(t *testing.T) {
 				},
 			},
 			wantErr: false,
+		},
+		{
+			name: "valid non-transactional SQL migration",
+			m: Migration{Version: "001", Name: "build_index", UpSQL: "CREATE INDEX CONCURRENTLY idx ON t (id)", NonTransactional: true,
+				SQLLockTimeout: time.Second, StatementTimeout: time.Minute},
+		},
+		{
+			name:    "non-transactional Go function is invalid",
+			m:       Migration{Version: "001", Name: "bad", UpSQL: "SELECT 1", UpFunc: func(context.Context, *sql.Tx) error { return nil }, NonTransactional: true},
+			wantErr: true,
+		},
+		{
+			name:    "sub-millisecond timeout is invalid",
+			m:       Migration{Version: "001", Name: "bad", UpSQL: "SELECT 1", StatementTimeout: time.Microsecond},
+			wantErr: true,
 		},
 	}
 

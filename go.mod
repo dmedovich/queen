@@ -1,4 +1,4 @@
-module github.com/yaop-labs/queen
+module github.com/dmedovich/queen
 
 go 1.26.3
 

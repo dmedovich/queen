@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // View renders the main cockpit. The layout is intentionally component based:

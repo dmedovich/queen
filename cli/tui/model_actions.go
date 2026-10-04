@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func (m *Model) handleAction() (tea.Model, tea.Cmd) {

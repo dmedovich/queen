@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/tap"
 )
 
 const IntegratedTapStartVersion = "005"

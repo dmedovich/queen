@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func outputDiffTable(migrations []queen.MigrationStatus, v1, v2, direction string, showSQL bool) {

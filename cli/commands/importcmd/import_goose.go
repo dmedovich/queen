@@ -3,11 +3,12 @@ package importcmd
 import "fmt"
 
 type gooseMigration struct {
-	file    string
-	version string
-	name    string
-	upSQL   string
-	downSQL string
+	file          string
+	version       string
+	name          string
+	upSQL         string
+	downSQL       string
+	noTransaction bool
 }
 
 func importFromGoose(sourcePath, output string, dryRun bool) error {
@@ -39,7 +40,8 @@ func importFromGoose(sourcePath, output string, dryRun bool) error {
 	fmt.Println("Next steps:")
 	fmt.Println("  1. Review the generated files in", output+"/")
 	fmt.Println("  2. Update import paths if needed")
-	fmt.Println("  3. Build and run your migration CLI")
+	fmt.Println("  3. If Goose already ran on this database, preview queen adopt-goose before running Queen up")
+	fmt.Println("  4. Build and run your migration CLI")
 
 	return nil
 }

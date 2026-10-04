@@ -16,6 +16,9 @@ var (
 	ErrNameTooLong          = errors.New("migration name exceeds 63 characters")
 	ErrInvalidMigrationName = errors.New("invalid migration name")
 	ErrAlreadyApplied       = errors.New("migration already applied")
+	ErrIncompleteMigration  = errors.New("incomplete non-transactional migration; inspect database state before recovery")
+	ErrUnknownApplied       = errors.New("database contains a migration not registered in code")
+	ErrOutOfOrderMigration  = errors.New("pending migration precedes an applied migration")
 )
 
 // MigrationError wraps an error with migration context.

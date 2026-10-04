@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // TestMigration is a simple test migration

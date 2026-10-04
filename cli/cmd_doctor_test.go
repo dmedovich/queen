@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/mock"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/mock"
 )
 
 func TestCollectDoctorResults(t *testing.T) {
@@ -59,13 +59,14 @@ func TestCollectDoctorResults(t *testing.T) {
 		})
 
 		results := collectDoctorResults(context.Background(), q, doctorOptions{})
-		if len(results) != 5 {
-			t.Fatalf("len(results) = %d, want 5", len(results))
+		if len(results) != 6 {
+			t.Fatalf("len(results) = %d, want 6", len(results))
 		}
 
 		expected := []string{
 			"Database Connection",
 			"Migration Table",
+			"Interrupted Migrations",
 			"Checksum Validation",
 			"Gap Detection",
 			"Registration Sync",

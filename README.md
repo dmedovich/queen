@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://pkg.go.dev/github.com/yaop-labs/queen"><img src="https://pkg.go.dev/badge/github.com/yaop-labs/queen.svg" alt="Go Reference"></a>
-  <a href="https://github.com/yaop-labs/queen/actions/workflows/test.yml"><img src="https://github.com/yaop-labs/queen/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
-  <a href="https://github.com/yaop-labs/queen/actions/workflows/integration-tests.yml"><img src="https://github.com/yaop-labs/queen/actions/workflows/integration-tests.yml/badge.svg" alt="Integration Tests"></a>
-  <a href="https://goreportcard.com/report/github.com/yaop-labs/queen"><img src="https://goreportcard.com/badge/github.com/yaop-labs/queen" alt="Go Report Card"></a>
-  <a href="https://github.com/yaop-labs/queen/releases"><img src="https://img.shields.io/github/v/release/yaop-labs/queen" alt="Release"></a>
+  <a href="https://pkg.go.dev/github.com/dmedovich/queen"><img src="https://pkg.go.dev/badge/github.com/dmedovich/queen.svg" alt="Go Reference"></a>
+  <a href="https://github.com/dmedovich/queen/actions/workflows/test.yml"><img src="https://github.com/dmedovich/queen/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
+  <a href="https://github.com/dmedovich/queen/actions/workflows/integration-tests.yml"><img src="https://github.com/dmedovich/queen/actions/workflows/integration-tests.yml/badge.svg" alt="Integration Tests"></a>
+  <a href="https://goreportcard.com/report/github.com/dmedovich/queen"><img src="https://goreportcard.com/badge/github.com/dmedovich/queen" alt="Go Report Card"></a>
+  <a href="https://github.com/dmedovich/queen/releases"><img src="https://img.shields.io/github/v/release/dmedovich/queen" alt="Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License"></a>
 </p>
 
@@ -39,7 +39,7 @@
 ## Installation
 
 ```bash
-go get github.com/yaop-labs/queen
+go get github.com/dmedovich/queen
 ```
 
 Requires Go 1.26.3+.
@@ -72,8 +72,8 @@ import (
     "database/sql"
     "log"
 
-    "github.com/yaop-labs/queen"
-    "github.com/yaop-labs/queen/drivers/postgres"
+    "github.com/dmedovich/queen"
+    "github.com/dmedovich/queen/drivers/postgres"
     _ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -137,8 +137,8 @@ The CLI exists for operational workflows around the same migration registry you 
 package main
 
 import (
-    "github.com/yaop-labs/queen"
-    "github.com/yaop-labs/queen/cli"
+    "github.com/dmedovich/queen"
+    "github.com/dmedovich/queen/cli"
 )
 
 func main() {
@@ -188,7 +188,7 @@ myapp/
 ```go
 package migrations
 
-import "github.com/yaop-labs/queen"
+import "github.com/dmedovich/queen"
 
 func Register(q *queen.Queen) {
     Register001CreateUsers(q)
@@ -201,7 +201,7 @@ Each migration file registers one focused change:
 ```go
 package migrations
 
-import "github.com/yaop-labs/queen"
+import "github.com/dmedovich/queen"
 
 func Register001CreateUsers(q *queen.Queen) {
     q.MustAdd(queen.M{
@@ -212,6 +212,8 @@ func Register001CreateUsers(q *queen.Queen) {
     })
 }
 ```
+
+After `queen init`, `queen create add_email` creates the next migration file and adds it to `Register` in `migrations/migrations.go`. Projects with a custom registry receive a manual registration instruction. Run `verify-registry` in CI to catch a missing registration regardless of how the migration file was created.
 
 Your app can import the same `migrations` package if you run migrations from application startup, and `cmd/migrate` can import it for release tooling.
 
@@ -244,7 +246,19 @@ queen import ./db/migrations --from goose
 
 Replace `queen` with your embedded migrator binary or `go run ./cmd/migrate` if you do not install a binary named `queen`.
 
-Queen preserves the version prefix from each goose filename, including timestamp versions such as `20240524054622_create_users.sql`. The importer currently supports goose `.sql` files with `-- +goose Up` and `-- +goose Down` sections; goose Go migrations are not converted automatically. Import writes files with exclusive create semantics and fails if a generated file already exists.
+Queen preserves the version prefix from each goose filename, including timestamp versions such as `20240524054622_create_users.sql`. The importer supports Goose SQL `Up`, optional `Down`, `StatementBegin`/`StatementEnd`, and single-command `NO TRANSACTION` migrations. Queen executes `NO TRANSACTION` migrations through its PostgreSQL driver. It rejects `ENVSUB`, malformed annotations, duplicate versions, and multi-command `NO TRANSACTION` files, since silently converting those would change execution semantics. Goose Go migrations are not converted automatically. Import writes files with exclusive create semantics and fails if a generated file already exists.
+
+**Import converts files only.** For a database already migrated with Goose, stop all Goose migrators, register the generated Queen files in your migrator binary, and preview the history transfer:
+
+```sh
+queen adopt-goose --driver postgres --dsn "$DATABASE_URL" --goose-table goose_db_version
+# Inspect the schema and version list printed by the preview, then use its plan fingerprint:
+queen adopt-goose --driver postgres --dsn "$DATABASE_URL" --goose-table goose_db_version \
+  --apply --plan PLAN_FINGERPRINT --verified-schema
+queen status --driver postgres --dsn "$DATABASE_URL"
+```
+
+`adopt-goose` defaults to a read-only preview. Apply requires the exact fingerprint from a prior preview and `--verified-schema`; it rereads both history tables under locks and writes all Queen records in one transaction. It never executes migration SQL or modifies Goose's table. It accepts a contiguous prefix of applied Goose versions backed by registered SQL-only Queen migrations with computed checksums, and an empty Queen table (or an already identical adoption). It rejects gaps, unknown versions, mismatched Queen records, or a changed plan. Use `--goose-table schema.goose_db_version` if Goose used another schema. Goose stores numeric version IDs, so Queen versions such as `001` are matched to Goose version `1`.
 
 ## Dry Run
 
@@ -281,7 +295,7 @@ q.MustAdd(queen.M{
 Observe each migration as it runs — SQL text, duration, rows affected, and errors — without bolting on a separate proxy. Install a `tap.Sink`:
 
 ```go
-import "github.com/yaop-labs/queen/tap"
+import "github.com/dmedovich/queen/tap"
 
 sink := tap.NewJSONSink(os.Stdout) // one JSON line per event
 q := queen.New(postgres.New(db), queen.WithTap(sink))
@@ -429,7 +443,7 @@ Current release guarantees are intentionally Postgres-first:
 
 | Database    | Locking guarantee | Migration transaction | Migration record atomic with body |
 |-------------|-------------------|-----------------------|-----------------------------------|
-| PostgreSQL  | Production-ready advisory lock pinned to one connection | Yes | Yes |
+| PostgreSQL  | Production-ready advisory lock pinned to the migration connection | Yes by default; opt-in non-transactional SQL runs outside a transaction | Yes by default; non-transactional SQL uses recovery markers instead |
 | MySQL       | `GET_LOCK` pinned to one connection; the connection is always discarded after release | Depends on MySQL DDL implicit-commit semantics | No |
 | SQLite      | Process-local lock across Queen instances; not a distributed or cross-process lock | Yes for transactional statements | Yes |
 | ClickHouse  | Best-effort table lock with synchronous cleanup; deployment-level serialization is still required | No true transaction support | No |
@@ -445,6 +459,10 @@ For PostgreSQL production use:
 - Prefer SQL migrations or Go functions that use the provided `*sql.Tx`.
 - Keep `ManualChecksum` stable for Go-function migrations and bump it when the function logic changes.
 - Let Queen record migrations through the PostgreSQL driver so the migration body and migration record commit atomically.
+
+The PostgreSQL migration table can be placed in an existing schema with `postgres.NewWithTableName(db, "schema.queen_migrations")` or CLI `--table schema.queen_migrations`. Queen quotes each identifier component separately; create the schema before running migrations.
+
+By default, `Up`, `Down`, `Reset`, and `Validate` reject applied versions missing from the registered migrations. `Up` and `Validate` also reject a pending version older than an already applied version. This prevents a stale application instance from changing an unfamiliar migration history. During a deliberate rolling deploy, set `Config.AllowUnknownApplied` (CLI `--allow-unknown-applied`) if old instances must coexist with newer migration records. Set `Config.AllowOutOfOrder` (CLI `--allow-out-of-order`) only when applying an older version is intentional.
 
 If your application already uses native `pgxpool.Pool`, use the pool adapter:
 
@@ -464,35 +482,81 @@ Queen uses pgx's `database/sql` adapter under the hood for this path. Closing `Q
 
 Queen also validates applied checksums before `Down` and `Reset`, not just before `Up`. If the code for an applied migration has drifted, fix the drift or intentionally update the recorded state before rolling back.
 
+### PostgreSQL statement limits and concurrent indexes
+
+Set limits on a migration that might wait for table locks or run for a long time:
+
+```go
+q.MustAdd(queen.M{
+    Version:          "004",
+    Name:             "add_lookup_column",
+    UpSQL:            `ALTER TABLE users ADD COLUMN lookup_key TEXT`,
+    DownSQL:          `ALTER TABLE users DROP COLUMN lookup_key`,
+    SQLLockTimeout:   5 * time.Second,
+    StatementTimeout: 2 * time.Minute,
+})
+```
+
+`SQLLockTimeout` maps to PostgreSQL `lock_timeout` and is separate from `Config.LockTimeout`, which limits waiting for Queen's advisory lock. `StatementTimeout` maps to PostgreSQL `statement_timeout`. Both default to zero, leaving the connection's configured values in effect. PostgreSQL applies these settings locally to the migration transaction.
+
+For commands such as `CREATE INDEX CONCURRENTLY`, opt into non-transactional SQL:
+
+```go
+q.MustAdd(queen.M{
+    Version:          "005",
+    Name:             "index_users_email",
+    UpSQL:            `CREATE INDEX CONCURRENTLY users_email_idx ON users (email)`,
+    DownSQL:          `DROP INDEX CONCURRENTLY users_email_idx`,
+    NonTransactional: true,
+    SQLLockTimeout:   5 * time.Second,
+    StatementTimeout: 10 * time.Minute,
+})
+```
+
+Use one SQL command per non-transactional migration. This mode is PostgreSQL-only and does not accept Go callbacks. Queen records `status=applying` before the up command and `status=rolling_back` before the down command. It marks a successful up as `success` or removes the record after a successful down. If a command or metadata update fails, the non-success status remains and later `Up`, `Down`, `Reset`, and `Validate` stop with `ErrIncompleteMigration`. `Status` displays `incomplete`.
+
+After an interruption, run `queen doctor` and inspect PostgreSQL to determine whether the SQL command took effect. Then resolve the record explicitly:
+
+```sh
+queen recover 001 --driver postgres --dsn "$DATABASE_URL" --state applied --verified
+# Or, only when the command's effects are absent:
+queen recover 001 --driver postgres --dsn "$DATABASE_URL" --state not-applied --verified
+```
+
+`recover` changes only the migration record; it never runs SQL. It requires the original migration to remain registered with its original checksum. A `not-applied` resolution permits a later `up` retry. The `--verified` flag confirms that you inspected the database and chose the matching state.
+
+Before retrying, inspect the database object and the row in `queen_migrations`. For an interrupted up: after confirming the SQL completed, set its status to `success`; if it did not complete, clean up any partial object and delete the row before retrying. For an interrupted down: delete the row if the rollback completed, or restore `status=success` if it did not. For example, a failed concurrent index build can leave an invalid index that needs to be dropped before retrying. Non-transactional SQL and its history record cannot commit atomically.
+
 ## CI/CD
 
 Queen migrations are Go code, so the release artifact for migrations is a small Go binary, not a directory of SQL files consumed by a global CLI.
 
-Recommended pipeline shape:
+Build the migrator once in CI and use the same binary in the test and deployment jobs. Set `QUEEN_DSN` from the job's database secret (and `QUEEN_DRIVER=postgres`), so the connection string does not appear in the command arguments.
 
 ```bash
 go test ./...
-go run ./cmd/migrate check --driver postgres --dsn "$DATABASE_URL" --ci --no-gaps
-go run ./cmd/migrate plan --driver postgres --dsn "$DATABASE_URL"
-go run ./cmd/migrate up --driver postgres --dsn "$DATABASE_URL" --yes
-go run ./cmd/migrate status --driver postgres --dsn "$DATABASE_URL"
-```
-
-For migration test databases that start empty, add rollback verification:
-
-```bash
-go run ./cmd/migrate check --driver postgres --dsn "$TEST_DATABASE_URL" --rollback-test
-```
-
-`--rollback-test` applies all migrations, rolls them back with `Reset`, then applies them again. It refuses to run if the target database already has applied migrations, so keep it pointed at a disposable test database.
-
-For repeatable deployments, build the migrator once and run that exact binary:
-
-```bash
 go build -o queen-migrate ./cmd/migrate
-./queen-migrate check --driver postgres --dsn "$DATABASE_URL" --ci --no-gaps
-./queen-migrate up --driver postgres --dsn "$DATABASE_URL" --yes
+./queen-migrate verify-registry --dir migrations
+QUEEN_DSN="$TEST_DATABASE_URL" ./queen-migrate check --rollback-test --no-gaps
 ```
+
+The rollback test requires a clean, disposable test database. It applies all migrations, rolls them back with `Reset`, then applies them again.
+
+In the deployment job, use the binary built in CI with `QUEEN_DSN` set to the target database:
+
+```bash
+./queen-migrate validate
+./queen-migrate plan
+./queen-migrate up --yes
+./queen-migrate check --ci --no-gaps
+./queen-migrate status
+```
+
+`check --ci` fails while any registered migration is pending, so run it after `up`. The pre-deploy `validate` checks the existing history against the release binary and still permits new migrations.
+
+`verify-registry` needs only the Go source directory and the built binary; it never connects to the database. It compares literal `Version` values in `queen.M`/`queen.Migration` declarations with the versions registered in that binary, catching forgotten registration calls and stale binaries. It also requires `ManualChecksum` for Go-function migrations. Run it while sources are present in CI. Keep migration versions as string literals; dynamically computed versions cannot be verified.
+
+For a complete PostgreSQL GitHub Actions example, see [CI/CD guide](docs/ci-cd.md).
 
 This works well as:
 
@@ -529,7 +593,7 @@ make test-mssql
 
 ## Documentation
 
-Full documentation: [yaop-labs.github.io/queen-docs](https://yaop-labs.github.io/queen-docs/).
+Deployment examples: [CI/CD guide](docs/ci-cd.md).
 
 ## License
 

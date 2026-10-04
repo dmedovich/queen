@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen"
-	naturalsort "github.com/yaop-labs/queen/internal/sort"
+	"github.com/dmedovich/queen"
+	naturalsort "github.com/dmedovich/queen/internal/sort"
 )
 
 func (app *App) logCmd() *cobra.Command {

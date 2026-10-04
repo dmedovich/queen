@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
-	"github.com/yaop-labs/queen/cli/tui"
+	"github.com/dmedovich/queen/cli/tui"
 )
 
 func (app *App) initCmd() *cobra.Command {
@@ -89,7 +89,7 @@ func initializeProject(driver string, withConfig bool, migrationsDir string) err
 	fmt.Println("  3. Build the migration CLI: go build -o migrate ./cmd/migrate")
 	fmt.Println("  4. Run migrations: ./migrate up")
 	fmt.Println()
-	fmt.Println("For more information, visit: https://github.com/yaop-labs/queen")
+	fmt.Println("For more information, visit: https://github.com/dmedovich/queen")
 
 	return nil
 }

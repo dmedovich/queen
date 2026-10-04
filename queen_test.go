@@ -75,6 +75,45 @@ func TestGetDriverNameNilDriver(t *testing.T) {
 	}
 }
 
+func TestStrictMigrationHistory(t *testing.T) {
+	ctx := context.Background()
+	newMigration := func(version string) Migration {
+		return Migration{Version: version, Name: "migration_" + version, UpFunc: func(context.Context, *sql.Tx) error { return nil }}
+	}
+	t.Run("unknown applied version blocks changes by default", func(t *testing.T) {
+		driver := &testDriver{applied: map[string]Applied{"002": {Version: "002", Status: "success"}}}
+		q := New(driver)
+		q.MustAdd(newMigration("001"))
+		if err := q.Up(ctx); !errors.Is(err, ErrUnknownApplied) {
+			t.Fatalf("Up error = %v, want ErrUnknownApplied", err)
+		}
+		allowed := NewWithConfig(driver, &Config{AllowUnknownApplied: true, AllowOutOfOrder: true})
+		allowed.MustAdd(newMigration("001"))
+		if err := allowed.Up(ctx); err != nil {
+			t.Fatalf("explicitly allowed rolling deploy: %v", err)
+		}
+	})
+	t.Run("older pending version requires explicit opt out", func(t *testing.T) {
+		newer := newMigration("002")
+		driver := &testDriver{applied: map[string]Applied{"002": {Version: "002", Name: newer.Name, Checksum: newer.Checksum(), Status: "success"}}}
+		q := New(driver)
+		q.MustAdd(newMigration("001"))
+		q.MustAdd(newer)
+		if err := q.Validate(ctx); !errors.Is(err, ErrOutOfOrderMigration) {
+			t.Fatalf("Validate error = %v, want ErrOutOfOrderMigration", err)
+		}
+		if err := q.Up(ctx); !errors.Is(err, ErrOutOfOrderMigration) {
+			t.Fatalf("Up error = %v, want ErrOutOfOrderMigration", err)
+		}
+		allowed := NewWithConfig(driver, &Config{AllowOutOfOrder: true})
+		allowed.MustAdd(newMigration("001"))
+		allowed.MustAdd(newer)
+		if err := allowed.Up(ctx); err != nil {
+			t.Fatalf("explicitly allowed out-of-order migration: %v", err)
+		}
+	})
+}
+
 func TestQueenConcurrentRegistrationAndReaders(t *testing.T) {
 	q := New(&testDriver{})
 	ctx := context.Background()
@@ -135,6 +174,56 @@ type unlockDeadlineDriver struct {
 	testDriver
 
 	sawDeadline bool
+}
+
+type unlockErrorDriver struct {
+	testDriver
+	err error
+}
+
+type lockFirstTestDriver struct {
+	testDriver
+	events []string
+}
+
+func (*lockFirstTestDriver) LockBeforeInit() {}
+func (d *lockFirstTestDriver) Lock(context.Context, time.Duration) error {
+	d.events = append(d.events, "lock")
+	return nil
+}
+func (d *lockFirstTestDriver) Init(context.Context) error {
+	d.events = append(d.events, "init")
+	return nil
+}
+
+func TestUpLocksBeforeInitWhenDriverRequiresIt(t *testing.T) {
+	driver := &lockFirstTestDriver{}
+	q := New(driver)
+	q.MustAdd(Migration{
+		Version: "001", Name: "lock_before_init",
+		UpFunc: func(context.Context, *sql.Tx) error { return nil },
+	})
+	if err := q.Up(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(driver.events) != 2 || driver.events[0] != "lock" || driver.events[1] != "init" {
+		t.Fatalf("events = %v, want [lock init]", driver.events)
+	}
+}
+
+func (d *unlockErrorDriver) Unlock(context.Context) error { return d.err }
+
+func TestUpReportsUnlockFailure(t *testing.T) {
+	unlockErr := errors.New("connection lost during unlock")
+	driver := &unlockErrorDriver{err: unlockErr}
+	q := New(driver)
+	q.MustAdd(Migration{
+		Version: "001", Name: "unlock_error",
+		UpFunc: func(context.Context, *sql.Tx) error { return nil },
+	})
+	if err := q.Up(context.Background()); !errors.Is(err, unlockErr) {
+		t.Fatalf("Up() error = %v, want unlock error", err)
+	}
 }
 
 func (d *unlockDeadlineDriver) Unlock(ctx context.Context) error {

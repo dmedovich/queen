@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen/tap"
 )
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

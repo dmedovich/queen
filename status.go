@@ -8,6 +8,7 @@ const (
 	StatusPending Status = iota
 	StatusApplied
 	StatusModified
+	StatusIncomplete
 )
 
 func (s Status) String() string {
@@ -18,6 +19,8 @@ func (s Status) String() string {
 		return "applied"
 	case StatusModified:
 		return "modified"
+	case StatusIncomplete:
+		return "incomplete"
 	default:
 		return "unknown"
 	}

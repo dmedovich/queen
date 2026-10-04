@@ -12,8 +12,8 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/base"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/base"
 )
 
 func TestQuoteIdentifier(t *testing.T) {
@@ -58,6 +58,12 @@ func TestQuoteIdentifier(t *testing.T) {
 				t.Errorf("quoteIdentifier(%q) = %q; want %q", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestQuotePostgresQualifiedTable(t *testing.T) {
+	if got, want := quotePostgresIdentifier(`app"schema.migration"history`), `"app""schema"."migration""history"`; got != want {
+		t.Fatalf("quoted table = %q, want %q", got, want)
 	}
 }
 
@@ -133,6 +139,25 @@ func TestHashTableName(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
+	t.Run("creates table in explicit schema", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = db.Close() }()
+		driver := NewWithTableName(db, "app.queen_migrations")
+		mock.ExpectBegin()
+		mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery("SELECT to_regclass").WithArgs(`"app"."queen_migrations"`).WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow(nil))
+		mock.ExpectExec(`CREATE TABLE IF NOT EXISTS "app"\."queen_migrations"`).WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectCommit()
+		if err := driver.Init(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
 	t.Run("creates migrations table successfully", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		if err != nil {
@@ -143,13 +168,14 @@ func TestInit(t *testing.T) {
 		driver := New(db)
 		ctx := context.Background()
 
+		mock.ExpectBegin()
+		mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery("SELECT to_regclass").WithArgs(`"queen_migrations"`).
+			WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow(nil))
 		mock.ExpectExec(`CREATE TABLE IF NOT EXISTS "queen_migrations"`).
 			WillReturnResult(sqlmock.NewResult(0, 0))
-
-		for range 7 {
-			mock.ExpectExec(`ALTER TABLE "queen_migrations" ADD COLUMN`).
-				WillReturnResult(sqlmock.NewResult(0, 0))
-		}
+		mock.ExpectCommit()
 
 		err = driver.Init(ctx)
 		if err != nil {
@@ -172,8 +198,14 @@ func TestInit(t *testing.T) {
 		ctx := context.Background()
 
 		createErr := errors.New("create table failed")
+		mock.ExpectBegin()
+		mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery("SELECT to_regclass").WithArgs(`"queen_migrations"`).
+			WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow(nil))
 		mock.ExpectExec(`CREATE TABLE IF NOT EXISTS "queen_migrations"`).
 			WillReturnError(createErr)
+		mock.ExpectRollback()
 
 		err = driver.Init(ctx)
 		if !errors.Is(err, createErr) {
@@ -185,7 +217,7 @@ func TestInit(t *testing.T) {
 		}
 	})
 
-	t.Run("continues on ALTER TABLE errors (idempotent)", func(t *testing.T) {
+	t.Run("returns ALTER TABLE error and rolls back", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		if err != nil {
 			t.Fatalf("failed to create mock: %v", err)
@@ -195,23 +227,223 @@ func TestInit(t *testing.T) {
 		driver := New(db)
 		ctx := context.Background()
 
-		mock.ExpectExec(`CREATE TABLE IF NOT EXISTS "queen_migrations"`).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+		mock.ExpectBegin()
+		mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery("SELECT to_regclass").WithArgs(`"queen_migrations"`).
+			WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow("queen_migrations"))
+		mock.ExpectQuery("SELECT attname FROM pg_attribute").WithArgs(`"queen_migrations"`).
+			WillReturnRows(sqlmock.NewRows([]string{"attname"}).AddRow("version").AddRow("name").AddRow("applied_at").AddRow("checksum"))
 
-		for range 7 {
-			mock.ExpectExec(`ALTER TABLE "queen_migrations" ADD COLUMN`).
-				WillReturnError(errors.New("column already exists"))
-		}
+		alterErr := errors.New("permission denied")
+		mock.ExpectExec(`ALTER TABLE "queen_migrations" ADD COLUMN`).WillReturnError(alterErr)
+		mock.ExpectRollback()
 
 		err = driver.Init(ctx)
-		if err != nil {
-			t.Errorf("Init() should not fail on ALTER errors: %v", err)
+		if !errors.Is(err, alterErr) {
+			t.Errorf("Init() error = %v; want %v", err, alterErr)
 		}
 
 		if err := mock.ExpectationsWereMet(); err != nil {
 			t.Errorf("unfulfilled expectations: %v", err)
 		}
 	})
+
+	t.Run("existing complete table requires no DDL", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = db.Close() }()
+		driver := New(db)
+		mock.ExpectBegin()
+		mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery("SELECT to_regclass").WithArgs(`"queen_migrations"`).
+			WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow("queen_migrations"))
+		mock.ExpectQuery("SELECT attname FROM pg_attribute").WithArgs(`"queen_migrations"`).
+			WillReturnRows(sqlmock.NewRows([]string{"attname"}).
+				AddRow("version").AddRow("name").AddRow("applied_at").AddRow("checksum").
+				AddRow("applied_by").AddRow("duration_ms").AddRow("hostname").
+				AddRow("environment").AddRow("action").AddRow("status").AddRow("error_message"))
+		mock.ExpectCommit()
+		if err := driver.Init(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
+func TestExecWithLockUsesOneConnection(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+
+	driver := New(db)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	mock.ExpectExec("SELECT pg_advisory_lock").WithArgs(driver.lockID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := driver.Lock(ctx, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectBegin()
+	mock.ExpectExec("CREATE TABLE one_connection_test").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	err = driver.Exec(ctx, sql.LevelDefault, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "CREATE TABLE one_connection_test (id int)")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("Exec() with one connection failed: %v", err)
+	}
+	mock.ExpectQuery("SELECT pg_advisory_unlock").WithArgs(driver.lockID).
+		WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
+	if err := driver.Unlock(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQueenUpWithOneConnection(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	driver := New(db)
+	q := queen.New(driver)
+	q.MustAdd(queen.M{Version: "001", Name: "one_connection", UpSQL: "CREATE TABLE one_connection_test (id int)"})
+
+	mock.ExpectExec("SELECT pg_advisory_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT to_regclass").WithArgs(`"queen_migrations"`).WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow(nil))
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT version, name, applied_at, checksum").WillReturnRows(
+		sqlmock.NewRows([]string{"version", "name", "applied_at", "checksum", "applied_by", "duration_ms", "hostname", "environment", "action", "status", "error_message"}),
+	)
+	mock.ExpectBegin()
+	mock.ExpectExec("CREATE TABLE one_connection_test").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT pg_advisory_unlock").WithArgs(driver.lockID).WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := q.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExecMigrationSetsLocalTimeouts(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	driver := New(db)
+	m := &queen.Migration{SQLLockTimeout: 250 * time.Millisecond, StatementTimeout: 2 * time.Second}
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT set_config").WithArgs("lock_timeout", "250ms").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT set_config").WithArgs("statement_timeout", "2000ms").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT 1").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	err = driver.ExecMigration(context.Background(), m, sql.LevelDefault, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(context.Background(), "SELECT 1")
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQueenNonTransactionalSQLUsesLockedConnection(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	db.SetMaxOpenConns(1)
+	driver := New(db)
+	q := queen.New(driver)
+	q.MustAdd(queen.M{
+		Version: "001", Name: "concurrent_index", NonTransactional: true,
+		UpSQL: "CREATE INDEX CONCURRENTLY idx ON t (id)",
+	})
+
+	mock.ExpectExec("SELECT pg_advisory_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectBegin()
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT to_regclass").WithArgs(`"queen_migrations"`).WillReturnRows(sqlmock.NewRows([]string{"to_regclass"}).AddRow(nil))
+	mock.ExpectExec("CREATE TABLE IF NOT EXISTS").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT version, name, applied_at, checksum").WillReturnRows(
+		sqlmock.NewRows([]string{"version", "name", "applied_at", "checksum", "applied_by", "duration_ms", "hostname", "environment", "action", "status", "error_message"}),
+	)
+	mock.ExpectExec("INSERT INTO").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("UPDATE").WithArgs("success", sqlmock.AnyArg(), "001").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT pg_advisory_unlock").WithArgs(driver.lockID).WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := q.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNonTransactionalTimeoutsAreRestored(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	driver := New(db)
+	ctx := context.Background()
+	mock.ExpectExec("SELECT pg_advisory_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := driver.Lock(ctx, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectQuery("SELECT current_setting").WithArgs("lock_timeout").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("0"))
+	mock.ExpectExec("SELECT set_config").WithArgs("lock_timeout", "500ms").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT current_setting").WithArgs("statement_timeout").WillReturnRows(sqlmock.NewRows([]string{"value"}).AddRow("5s"))
+	mock.ExpectExec("SELECT set_config").WithArgs("statement_timeout", "2000ms").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("CREATE INDEX CONCURRENTLY").WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("SELECT set_config").WithArgs("statement_timeout", "5s").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("SELECT set_config").WithArgs("lock_timeout", "0").WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := driver.ExecNonTransactional(ctx, &queen.Migration{
+		UpSQL:          "CREATE INDEX CONCURRENTLY idx ON t (id)",
+		SQLLockTimeout: 500 * time.Millisecond, StatementTimeout: 2 * time.Second,
+	}, queen.DirectionUp); err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectQuery("SELECT pg_advisory_unlock").WithArgs(driver.lockID).WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
+	if err := driver.Unlock(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLock(t *testing.T) {
@@ -238,9 +470,9 @@ func TestLock(t *testing.T) {
 			t.Error("lockConn should be set after successful lock")
 		}
 
-		mock.ExpectExec("SELECT pg_advisory_unlock").
+		mock.ExpectQuery("SELECT pg_advisory_unlock").
 			WithArgs(driver.lockID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
+			WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
 
 		if err := driver.Unlock(ctx); err != nil {
 			t.Fatalf("Unlock() failed: %v", err)
@@ -300,9 +532,9 @@ func TestLock(t *testing.T) {
 			t.Fatal("first lock connection was cleared by failed nested Lock")
 		}
 
-		mock.ExpectExec("SELECT pg_advisory_unlock").
+		mock.ExpectQuery("SELECT pg_advisory_unlock").
 			WithArgs(driver.lockID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
+			WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
 
 		if err := driver.Unlock(ctx); err != nil {
 			t.Fatalf("Unlock() failed: %v", err)
@@ -334,9 +566,9 @@ func TestUnlock(t *testing.T) {
 			t.Fatalf("Lock() failed: %v", err)
 		}
 
-		mock.ExpectExec("SELECT pg_advisory_unlock").
+		mock.ExpectQuery("SELECT pg_advisory_unlock").
 			WithArgs(driver.lockID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
+			WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(true))
 
 		err = driver.Unlock(ctx)
 		if err != nil {
@@ -388,7 +620,7 @@ func TestUnlock(t *testing.T) {
 		}
 
 		unlockErr := errors.New("unlock failed")
-		mock.ExpectExec("SELECT pg_advisory_unlock").
+		mock.ExpectQuery("SELECT pg_advisory_unlock").
 			WithArgs(driver.lockID).
 			WillReturnError(unlockErr)
 
@@ -399,6 +631,27 @@ func TestUnlock(t *testing.T) {
 
 		if err := mock.ExpectationsWereMet(); err != nil {
 			t.Errorf("unfulfilled expectations: %v", err)
+		}
+	})
+
+	t.Run("reports lost session lock", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = db.Close() }()
+		driver := New(db)
+		mock.ExpectExec("SELECT pg_advisory_lock").WithArgs(driver.lockID).WillReturnResult(sqlmock.NewResult(0, 1))
+		if err := driver.Lock(context.Background(), time.Second); err != nil {
+			t.Fatal(err)
+		}
+		mock.ExpectQuery("SELECT pg_advisory_unlock").WithArgs(driver.lockID).
+			WillReturnRows(sqlmock.NewRows([]string{"unlocked"}).AddRow(false))
+		if err := driver.Unlock(context.Background()); err == nil {
+			t.Fatal("expected lost-lock error")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
 		}
 	})
 }

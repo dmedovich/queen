@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/dmedovich/queen/drivers/postgres"
 )
 
 func TestGetSQLDriverName(t *testing.T) {
@@ -84,5 +86,20 @@ func TestCreateDriver(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCreatePostgresDriverUsesConfiguredTable(t *testing.T) {
+	app := &App{config: &Config{Driver: DriverPostgres, Table: "custom_migrations"}}
+	driver, err := app.createDriver(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pgDriver, ok := driver.(*postgres.Driver)
+	if !ok {
+		t.Fatalf("driver type = %T, want *postgres.Driver", driver)
+	}
+	if pgDriver.TableName != "custom_migrations" {
+		t.Errorf("driver table = %q, want custom_migrations", pgDriver.TableName)
 	}
 }

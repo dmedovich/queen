@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func (app *App) setupQueen(ctx context.Context) (*queen.Queen, error) {
@@ -46,7 +46,9 @@ func (app *App) setupQueen(ctx context.Context) (*queen.Queen, error) {
 	}
 
 	queenConfig := &queen.Config{
-		TableName: app.config.Table,
+		TableName:           app.config.Table,
+		AllowUnknownApplied: app.config.AllowUnknownApplied,
+		AllowOutOfOrder:     app.config.AllowOutOfOrder,
 	}
 	if app.config.LockTimeout > 0 {
 		queenConfig.LockTimeout = app.config.LockTimeout

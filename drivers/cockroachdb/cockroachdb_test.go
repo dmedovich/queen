@@ -11,8 +11,8 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/base"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/base"
 )
 
 const CockroachTestDSN = "postgresql://root@localhost:26257/defaultdb?sslmode=disable"

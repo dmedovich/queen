@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	naturalsort "github.com/yaop-labs/queen/internal/sort"
+	naturalsort "github.com/dmedovich/queen/internal/sort"
 )
 
 type GapType string

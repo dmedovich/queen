@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func (app *App) outputPlanTable(plans []queen.MigrationPlan, direction string) error {

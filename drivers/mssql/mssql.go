@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/base"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/base"
 )
 
 // Driver implements the queen.Driver interface for MS SQL Server.

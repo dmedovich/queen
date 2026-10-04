@@ -3,7 +3,7 @@ package live
 import (
 	"time"
 
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen/tap"
 )
 
 func (m *model) elapsed() time.Duration {

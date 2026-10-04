@@ -18,10 +18,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/cli/tui"
-	"github.com/yaop-labs/queen/drivers/sqlite"
-	"github.com/yaop-labs/queen/tests/demodata"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/cli/tui"
+	"github.com/dmedovich/queen/drivers/sqlite"
+	"github.com/dmedovich/queen/tests/demodata"
 )
 
 func main() {

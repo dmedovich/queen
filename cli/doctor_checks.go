@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // checkDatabaseConnection verifies database connectivity.
@@ -45,6 +45,29 @@ func checkMigrationTable(ctx context.Context, q *queen.Queen) DoctorResult {
 		Status:  statusPass,
 		Message: fmt.Sprintf("Migration table exists with %d records", len(applied)),
 	}
+}
+
+// checkIncompleteMigrations reports records left by interrupted SQL commands.
+func checkIncompleteMigrations(ctx context.Context, q *queen.Queen) DoctorResult {
+	applied, err := q.Driver().GetApplied(ctx)
+	if err != nil {
+		return DoctorResult{Check: "Interrupted Migrations", Status: statusFail, Message: "Failed to inspect migration records", Details: err.Error()}
+	}
+	var incomplete []string
+	for _, entry := range applied {
+		if entry.Status != "" && entry.Status != "success" {
+			incomplete = append(incomplete, fmt.Sprintf("%s (%s)", entry.Version, entry.Status))
+		}
+	}
+	if len(incomplete) != 0 {
+		return DoctorResult{
+			Check: "Interrupted Migrations", Status: statusFail,
+			Message:  fmt.Sprintf("%d migration(s) require manual recovery", len(incomplete)),
+			Details:  fmt.Sprintf("Inspect the database, then run queen recover VERSION --state applied|not-applied --verified. Records: %s", strings.Join(incomplete, ", ")),
+			Severity: "error",
+		}
+	}
+	return DoctorResult{Check: "Interrupted Migrations", Status: statusPass, Message: "No interrupted migrations"}
 }
 
 // checkChecksums validates that applied migrations haven't been modified.

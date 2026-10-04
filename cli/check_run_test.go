@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func TestCheckRollbackCycleAppliesRollsBackAndReapplies(t *testing.T) {

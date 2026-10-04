@@ -1,6 +1,8 @@
 package importcmd
 
 import (
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,10 +13,12 @@ func TestParseGooseSQL(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		input    string
-		wantUp   string
-		wantDown string
+		name              string
+		input             string
+		wantUp            string
+		wantDown          string
+		wantNoTransaction bool
+		wantErr           string
 	}{
 		{
 			name: "standard goose migration",
@@ -49,10 +53,9 @@ DROP TABLE posts;`,
 			wantDown: "DROP INDEX idx_posts_title;\nDROP TABLE posts;",
 		},
 		{
-			name:     "empty file",
-			input:    "",
-			wantUp:   "",
-			wantDown: "",
+			name:    "empty file",
+			input:   "",
+			wantErr: "exactly one Up",
 		},
 		{
 			name: "comments before directives",
@@ -82,16 +85,34 @@ $$ LANGUAGE plpgsql;
 
 -- +goose Down
 DROP FUNCTION IF EXISTS update_timestamp();`,
-			wantUp:   "-- +goose StatementBegin\nCREATE OR REPLACE FUNCTION update_timestamp()\nRETURNS TRIGGER AS $$\nBEGIN\n    NEW.updated_at = NOW();\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n-- +goose StatementEnd",
+			wantUp:   "CREATE OR REPLACE FUNCTION update_timestamp()\nRETURNS TRIGGER AS $$\nBEGIN\n    NEW.updated_at = NOW();\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;",
 			wantDown: "DROP FUNCTION IF EXISTS update_timestamp();",
 		},
+		{name: "case insensitive annotation", input: "-- +goose up\nSELECT 1;\n-- +goose down\nSELECT 2;", wantUp: "SELECT 1;", wantDown: "SELECT 2;"},
+		{name: "nontransactional annotation", input: "-- +goose NO TRANSACTION\n-- +goose Up\nCREATE INDEX CONCURRENTLY idx ON t (id);", wantUp: "CREATE INDEX CONCURRENTLY idx ON t (id);", wantNoTransaction: true},
+		{name: "env substitution rejected", input: "-- +goose Up\n-- +goose ENVSUB ON\nSELECT '${NAME}';", wantErr: "ENVSUB"},
+		{name: "duplicate up rejected", input: "-- +goose Up\nSELECT 1;\n-- +goose Up\nSELECT 2;", wantErr: "duplicate Up"},
+		{name: "unmatched statement marker rejected", input: "-- +goose Up\n-- +goose StatementBegin\nSELECT 1;", wantErr: "balanced statement markers"},
+		{name: "empty down rejected", input: "-- +goose Up\nSELECT 1;\n-- +goose Down", wantErr: "Down section is empty"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			gotUp, gotDown := parseGooseSQL(tt.input)
+			gotUp, gotDown, noTransaction, err := parseGooseSQL(tt.input)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if noTransaction != tt.wantNoTransaction {
+				t.Errorf("noTransaction = %t, want %t", noTransaction, tt.wantNoTransaction)
+			}
 			if gotUp != tt.wantUp {
 				t.Errorf("upSQL mismatch\ngot:  %q\nwant: %q", gotUp, tt.wantUp)
 			}
@@ -107,7 +128,7 @@ func TestGenerateQueenMigrationFile(t *testing.T) {
 
 	result := generateQueenMigrationFile("001", "create_users", "Register001create_users",
 		"CREATE TABLE users (id SERIAL PRIMARY KEY);",
-		"DROP TABLE users;",
+		"DROP TABLE users;", false,
 	)
 
 	checks := []struct {
@@ -115,7 +136,7 @@ func TestGenerateQueenMigrationFile(t *testing.T) {
 		contain string
 	}{
 		{"package declaration", "package migrations"},
-		{"queen import", `"github.com/yaop-labs/queen"`},
+		{"queen import", `"github.com/dmedovich/queen"`},
 		{"function name", "func Register001create_users(q *queen.Queen)"},
 		{"version", `Version: "001"`},
 		{"name", `Name:    "create_users"`},
@@ -136,12 +157,88 @@ func TestGenerateQueenMigrationFile_BacktickEscaping(t *testing.T) {
 
 	result := generateQueenMigrationFile("001", "add_json", "Register001add_json",
 		"ALTER TABLE users ADD COLUMN meta JSON DEFAULT '`{}`';",
-		"ALTER TABLE users DROP COLUMN meta;",
+		"ALTER TABLE users DROP COLUMN meta;", false,
 	)
 
 	// Backticks in SQL should be escaped for Go raw string literals
 	if strings.Count(result, "` + \"`\" + `") < 1 {
 		t.Error("backticks in SQL should be escaped in generated Go code")
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "generated.go", result, 0); err != nil {
+		t.Fatalf("generated Go is invalid: %v", err)
+	}
+}
+
+func TestImportFromGoose_NoTransaction(t *testing.T) {
+	sourceDir := t.TempDir()
+	outputDir := filepath.Join(t.TempDir(), "out")
+	content := "-- +goose NO TRANSACTION\n-- +goose Up\nCREATE INDEX CONCURRENTLY idx ON users (id);\n-- +goose Down\nDROP INDEX CONCURRENTLY idx;"
+	if err := os.WriteFile(filepath.Join(sourceDir, "001_concurrent_index.sql"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := importFromGoose(sourceDir, outputDir, false); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(outputDir, "001_concurrent_index.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), "NonTransactional: true") {
+		t.Fatalf("NO TRANSACTION semantics lost:\n%s", body)
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "001_concurrent_index.go", body, 0); err != nil {
+		t.Fatalf("generated Go is invalid: %v", err)
+	}
+}
+
+func TestImportFromGoose_RejectsUnsupportedInputWithoutOutput(t *testing.T) {
+	for _, tc := range []struct{ name, files, want string }{
+		{"envsub", "-- +goose Up\n-- +goose ENVSUB ON\nSELECT '${NAME}';", "ENVSUB"},
+		{"multi no transaction", "-- +goose NO TRANSACTION\n-- +goose Up\nSELECT 1; SELECT 2;", "multiple SQL statements"},
+		{"empty up", "-- +goose Up\n-- +goose Down\nSELECT 1;", "Up section is empty"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sourceDir := t.TempDir()
+			outputDir := filepath.Join(t.TempDir(), "out")
+			if err := os.WriteFile(filepath.Join(sourceDir, "001_example.sql"), []byte(tc.files), 0644); err != nil {
+				t.Fatal(err)
+			}
+			err := importFromGoose(sourceDir, outputDir, false)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("import error = %v, want %q", err, tc.want)
+			}
+			if _, err := os.Stat(outputDir); !os.IsNotExist(err) {
+				t.Fatalf("output created after rejected source: %v", err)
+			}
+		})
+	}
+}
+
+func TestImportFromGoose_RejectsDuplicateVersions(t *testing.T) {
+	sourceDir := t.TempDir()
+	for _, name := range []string{"001_first.sql", "1_second.sql"} {
+		if err := os.WriteFile(filepath.Join(sourceDir, name), []byte("-- +goose Up\nSELECT 1;"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := importFromGoose(sourceDir, t.TempDir(), true); err == nil || !strings.Contains(err.Error(), "duplicate goose version") {
+		t.Fatalf("duplicate version error = %v", err)
+	}
+}
+
+func TestImportFromGoose_RejectsGoMigrationInMixedSource(t *testing.T) {
+	sourceDir := t.TempDir()
+	for name, body := range map[string]string{
+		"001_create_users.sql": "-- +goose Up\nSELECT 1;",
+		"002_backfill.go":      "package migrations",
+	} {
+		if err := os.WriteFile(filepath.Join(sourceDir, name), []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := importFromGoose(sourceDir, filepath.Join(t.TempDir(), "out"), false)
+	if err == nil || !strings.Contains(err.Error(), "cannot be converted automatically") {
+		t.Fatalf("mixed source error = %v", err)
 	}
 }
 
@@ -153,7 +250,7 @@ func TestGenerateRegistrationFile(t *testing.T) {
 
 	checks := []string{
 		"package migrations",
-		`"github.com/yaop-labs/queen"`,
+		`"github.com/dmedovich/queen"`,
 		"func Register(q *queen.Queen)",
 		"Register001create_users(q)",
 		"Register002add_posts(q)",
@@ -424,7 +521,7 @@ func TestImportFromGoose_InvalidFileName(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when all files are invalid")
 	}
-	if !strings.Contains(err.Error(), "no valid goose migrations found") {
+	if !strings.Contains(err.Error(), "invalid goose migration filename") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

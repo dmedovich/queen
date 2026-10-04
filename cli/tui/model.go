@@ -10,8 +10,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/tap"
 )
 
 type ViewMode int

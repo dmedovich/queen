@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func TestPlaceholderDollar(t *testing.T) {

@@ -13,9 +13,9 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/clickhouse"
-	helpers "github.com/yaop-labs/queen/tests/integration"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/clickhouse"
+	helpers "github.com/dmedovich/queen/tests/integration"
 )
 
 func setupClickHouse(t *testing.T) (*sql.DB, func()) {

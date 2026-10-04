@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/mock"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/mock"
 )
 
 // Example demonstrates basic usage of Queen migrations.

@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/mysql"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/mysql"
 )
 
 // Example demonstrates basic usage of the MySQL driver.

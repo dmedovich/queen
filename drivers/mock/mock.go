@@ -15,7 +15,7 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 // Driver is an in-memory mock implementation of queen.Driver for testing.

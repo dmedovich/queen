@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func TestCountStatuses(t *testing.T) {
@@ -20,7 +20,7 @@ func TestCountStatuses(t *testing.T) {
 		{Version: "005", Status: queen.StatusPending},
 	}
 
-	applied, pending, modified := countStatuses(statuses)
+	applied, pending, modified, _ := countStatuses(statuses)
 
 	if applied != 2 {
 		t.Errorf("applied = %d, want 2", applied)

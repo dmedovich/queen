@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/yaop-labs/queen"
+	"github.com/dmedovich/queen"
 )
 
 func TestWithQueenOptionsRestoresPreviousOptions(t *testing.T) {

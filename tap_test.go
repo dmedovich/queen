@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/yaop-labs/queen"
-	"github.com/yaop-labs/queen/drivers/sqlite"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/sqlite"
+	"github.com/dmedovich/queen/tap"
 )
 
 func newTapTestQueen(t *testing.T, sink tap.Sink) (*queen.Queen, func()) {

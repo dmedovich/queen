@@ -5,7 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/yaop-labs/queen/tap"
+	"github.com/dmedovich/queen/tap"
 )
 
 func (m *Model) startTappedOperation(label string, work func() operationCompleteMsg) (tea.Model, tea.Cmd) {

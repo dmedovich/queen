@@ -26,6 +26,18 @@ type TransactionalRecorder interface {
 	RemoveTx(ctx context.Context, tx *sql.Tx, version string) error
 }
 
+// MigrationExecutor applies per-migration SQL timeouts within a transaction.
+type MigrationExecutor interface {
+	ExecMigration(ctx context.Context, m *Migration, isolationLevel sql.IsolationLevel, fn func(*sql.Tx) error) error
+}
+
+// NonTransactionalExecutor supports SQL commands that cannot run in a transaction.
+// SetMigrationStatus persists the recovery state before and after the command.
+type NonTransactionalExecutor interface {
+	ExecNonTransactional(ctx context.Context, m *Migration, direction string) error
+	SetMigrationStatus(ctx context.Context, version, status string, durationMS int64) error
+}
+
 // SQLDBProvider is implemented by drivers that can expose their underlying
 // database handle for optional diagnostics such as EXPLAIN.
 type SQLDBProvider interface {
