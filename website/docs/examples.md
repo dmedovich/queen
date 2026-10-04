@@ -79,7 +79,8 @@ q.MustAdd(queen.M{
 
 ```bash
 go build -o queen-migrate ./cmd/migrate
-./queen-migrate check --driver postgres --dsn "$DATABASE_URL" --ci --no-gaps
+./queen-migrate validate --driver postgres --dsn "$DATABASE_URL"
 ./queen-migrate plan --driver postgres --dsn "$DATABASE_URL"
 ./queen-migrate up --driver postgres --dsn "$DATABASE_URL" --yes
+./queen-migrate check --driver postgres --dsn "$DATABASE_URL" --ci --no-gaps
 ```

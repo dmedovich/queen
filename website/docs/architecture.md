@@ -64,7 +64,7 @@ func main() {
 That gives you normal operational commands without separating migration code from release code:
 
 - `plan` before a deploy;
-- `check --ci --no-gaps` in CI;
+- `check --ci --no-gaps` after `up` in a release job;
 - `up --yes` in controlled release jobs;
 - `doctor` during incident diagnosis;
 - `baseline`, `squash`, and `import` for history maintenance.

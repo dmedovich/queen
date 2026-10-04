@@ -7,9 +7,13 @@ title: Import Goose Migrations
 
 Queen can convert Goose SQL migrations into Go migration files. Conversion does not transfer the database's applied migration history.
 
+Run the import into a new output directory. The importer creates its own `migrations.go` registry and refuses to overwrite an existing one. If you already ran `queen init`, import into a separate directory, review the generated files, and merge them into your application's migration package before building the final migrator.
+
+The commands below assume `cmd/migrate` already exists. In a fresh module, use the temporary [bootstrap entry point](workflows.md#new-project) to run `import` first, then add the permanent migrator entry point shown in [Project Structure](project-structure.md#cli-entrypoint).
+
 ```bash
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations --dry-run
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations --dry-run
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations
 ```
 
 The importer supports `.sql` files with goose sections:

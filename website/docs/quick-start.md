@@ -72,7 +72,7 @@ for _, s := range statuses {
 
 ## Add a migrator command
 
-Create `cmd/migrate/main.go`:
+After registering migrations in a `myapp/migrations` package, create `cmd/migrate/main.go`:
 
 ```go
 package main
@@ -96,6 +96,8 @@ go run ./cmd/migrate status --driver postgres --dsn "$DATABASE_URL"
 go run ./cmd/migrate plan --driver postgres --dsn "$DATABASE_URL"
 go run ./cmd/migrate up --driver postgres --dsn "$DATABASE_URL" --yes
 ```
+
+To scaffold both packages automatically, follow [New project](workflows.md#new-project).
 
 Next reads:
 

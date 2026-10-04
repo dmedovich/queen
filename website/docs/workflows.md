@@ -9,9 +9,27 @@ This page shows how the pieces fit together in real projects.
 
 ## New project
 
+`init` is an embedded CLI command, so a new project needs a small bootstrap entry point before it has `cmd/migrate`. From the root of a Go module, create a temporary file:
+
+```go title="queen-bootstrap.go"
+package main
+
+import (
+    "github.com/dmedovich/queen"
+    "github.com/dmedovich/queen/cli"
+)
+
+func main() {
+    cli.Run(func(*queen.Queen) {})
+}
+```
+
+Run it once to generate the permanent migrator and migration registry:
+
 ```bash
 go get github.com/dmedovich/queen
-go run ./cmd/migrate init --driver postgres --with-config
+go run ./queen-bootstrap.go init --driver postgres --with-config
+rm ./queen-bootstrap.go
 go mod tidy
 ```
 
@@ -98,19 +116,19 @@ Baseline records migrations as applied without executing SQL. Use it only after 
 
 ## Import from goose
 
-Preview first:
+Preview first. Use a new output directory because the importer generates its own registry and will not overwrite the one created by `init`:
 
 ```bash
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations --dry-run
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations --dry-run
 ```
 
 Then import:
 
 ```bash
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations
 ```
 
-The importer fails instead of overwriting existing files. Review generated Go files before committing. If Goose already migrated the database, use `adopt-goose` to preview and transfer its applied history before running Queen `up`; see [Goose import](goose-import.md).
+Review the generated Go files and merge their registrations into the application's migrator before committing. If Goose already migrated the database, use `adopt-goose` to preview and transfer its applied history before running Queen `up`; see [Goose import](goose-import.md).
 
 ## Clean up old migration history
 

@@ -24,4 +24,3 @@
 - `verify-registry` checks that the built migrator contains the versions declared in migration source files. The generated project registers files created by `queen create` automatically. `check --json` and the CI/CD guide support building, testing, and deploying the same migrator binary.
 - CI covers formatting, linting, vetting, race tests, and database integration suites.
 
-See [v1.0 readiness](https://dmedovich.github.io/queen/docs/v1-readiness) for the release gates after `v0.9.0`.

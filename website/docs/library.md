@@ -126,7 +126,7 @@ Long-running public operations on a single `Queen` instance are serialized inter
 | --- | --- |
 | `pending` | Registered in code, not recorded in the database. |
 | `applied` | Registered and recorded with matching checksum. |
-| `modified` | Applied, but the registered SQL checksum differs from the stored checksum. |
+| `modified` | Applied, but the registered checksum differs from the stored checksum. |
 | `incomplete` | A non-transactional migration needs manual inspection and recovery. |
 
 `modified` and `incomplete` block migration execution until you resolve the problem.

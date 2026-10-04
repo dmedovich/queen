@@ -7,7 +7,7 @@ title: Troubleshooting
 
 ## Checksum mismatch
 
-Queen detected that an applied SQL migration changed after it was recorded.
+Queen detected that an applied migration's stored checksum no longer matches the registered migration. This can follow a SQL edit or a changed `ManualChecksum` for a Go-function migration.
 
 What to do:
 

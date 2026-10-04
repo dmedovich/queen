@@ -32,7 +32,7 @@ Known limits:
 Run import in dry-run mode first:
 
 ```bash
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations --dry-run
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations --dry-run
 ```
 
 ## `create` and naming

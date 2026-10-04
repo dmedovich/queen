@@ -302,8 +302,8 @@ Current behavior: only SQL migrations with SQL rollback can be squashed safely.
 Imports migrations from another tool. Current importer: goose SQL migrations.
 
 ```bash
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations --dry-run
-go run ./cmd/migrate import ./db/migrations --from goose --output migrations
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations --dry-run
+go run ./cmd/migrate import ./db/migrations --from goose --output imported_migrations
 ```
 
 Flags:
@@ -314,7 +314,7 @@ Flags:
 | `--output` | `migrations` | Output directory. |
 | `--dry-run` | `false` | Preview conversion without writing files. |
 
-The importer supports goose `.sql` files with `-- +goose Up` and `-- +goose Down`. It preserves timestamp versions and fails instead of overwriting existing generated files.
+The importer supports goose `.sql` files with `-- +goose Up` and `-- +goose Down`. It preserves timestamp versions, generates its own `migrations.go`, and fails instead of overwriting an existing registry. Use an unused output directory, then integrate the generated files into the final migrator.
 
 See [Goose import](goose-import.md) for supported annotations and transferring history from an existing Goose database.
 
@@ -372,12 +372,12 @@ Limitation: semver naming config exists, but `create` does not expose a manual `
 
 ## `init`
 
-Scaffolds a Queen migrator.
+Scaffolds a Queen migrator. In a new project, run it through the temporary entry point shown in [New project](workflows.md#new-project); `cmd/migrate` does not exist until `init` creates it.
 
 ```bash
-go run ./cmd/migrate init --driver postgres --with-config
-go run ./cmd/migrate init --interactive
-go run ./cmd/migrate init --migrations-dir db/migrations
+go run ./queen-bootstrap.go init --driver postgres --with-config
+go run ./queen-bootstrap.go init --interactive
+go run ./queen-bootstrap.go init --migrations-dir db/migrations
 ```
 
 Flags:
