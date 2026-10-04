@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/base"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func TestQuoteIdentifier(t *testing.T) {

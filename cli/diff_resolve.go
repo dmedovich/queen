@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"slices"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/dmedovich/queen"
@@ -12,9 +12,9 @@ import (
 func resolveVersion(version string, statuses []queen.MigrationStatus) (string, error) {
 	switch version {
 	case "current":
-		for _, statuse := range slices.Backward(statuses) {
-			if statuse.Status == queen.StatusApplied {
-				return statuse.Version, nil
+		for _, status := range slices.Backward(statuses) {
+			if status.Status == queen.StatusApplied {
+				return status.Version, nil
 			}
 		}
 		return "", fmt.Errorf("no migrations applied yet")

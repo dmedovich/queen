@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen"
+	"github.com/spf13/cobra"
 )
 
 func (app *App) gotoCmd() *cobra.Command {

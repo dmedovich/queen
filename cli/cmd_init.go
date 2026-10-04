@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen/cli/tui"
+	"github.com/spf13/cobra"
 )
 
 func (app *App) initCmd() *cobra.Command {

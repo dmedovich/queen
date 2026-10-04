@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmedovich/queen"
+	"github.com/dmedovich/queen/drivers/postgres"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"github.com/dmedovich/queen"
-	"github.com/dmedovich/queen/drivers/postgres"
 )
 
 func TestGooseImportPostgresRoundTrip(t *testing.T) {

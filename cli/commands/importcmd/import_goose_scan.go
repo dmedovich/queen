@@ -161,10 +161,10 @@ func parseGooseSQL(content string) (upSQL, downSQL string, noTransaction bool, e
 	upSQL = strings.TrimSpace(strings.Join(upLines, "\n"))
 	downSQL = strings.TrimSpace(strings.Join(downLines, "\n"))
 	if upSQL == "" {
-		return "", "", false, fmt.Errorf("Up section is empty")
+		return "", "", false, fmt.Errorf("up section is empty")
 	}
 	if downCount != 0 && downSQL == "" {
-		return "", "", false, fmt.Errorf("Down section is empty")
+		return "", "", false, fmt.Errorf("down section is empty")
 	}
 	return upSQL, downSQL, noTransaction, nil
 }

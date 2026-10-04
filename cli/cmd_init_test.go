@@ -52,9 +52,9 @@ require github.com/dmedovich/queen v0.0.0
 		t.Fatalf("write temp go.mod: %v", err)
 	}
 
-	runGeneratedProjectCommand(t, "go", "mod", "tidy")
-	runGeneratedProjectCommand(t, "go", "test", "./...")
-	runGeneratedProjectCommand(t, "go", "build", "-o", "migrate", "./cmd/migrate")
+	runGeneratedProjectCommand(t, "mod", "tidy")
+	runGeneratedProjectCommand(t, "test", "./...")
+	runGeneratedProjectCommand(t, "build", "-o", "migrate", "./cmd/migrate")
 	check := exec.Command("./migrate", "check", "--json")
 	check.Env = append(os.Environ(), "QUEEN_DRIVER=", "QUEEN_DSN=")
 	checkOutput, checkErr := check.CombinedOutput()
@@ -66,9 +66,9 @@ require github.com/dmedovich/queen v0.0.0
 	if err := json.Unmarshal(checkOutput, &checkResult); err != nil || checkResult.ExitCode != 2 {
 		t.Fatalf("check process JSON = %+v, err=%v; output=%s", checkResult, err, checkOutput)
 	}
-	runGeneratedProjectCommand(t, "go", "run", "./cmd/migrate", "verify-registry")
-	runGeneratedProjectCommand(t, "go", "run", "./cmd/migrate", "create", "add_email")
-	runGeneratedProjectCommand(t, "go", "run", "./cmd/migrate", "verify-registry")
+	runGeneratedProjectCommand(t, "run", "./cmd/migrate", "verify-registry")
+	runGeneratedProjectCommand(t, "run", "./cmd/migrate", "create", "add_email")
+	runGeneratedProjectCommand(t, "run", "./cmd/migrate", "verify-registry")
 	if err := os.WriteFile(filepath.Join("migrations", "003_unregistered.go"), []byte(generateSQLTemplate("003", "unregistered", "Migration003Unregistered")), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -101,14 +101,14 @@ require github.com/dmedovich/queen v0.0.0
 	}
 }
 
-func runGeneratedProjectCommand(t *testing.T, name string, args ...string) {
+func runGeneratedProjectCommand(t *testing.T, args ...string) {
 	t.Helper()
 
-	cmd := exec.Command(name, args...)
+	cmd := exec.Command("go", args...)
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("generated project command %q %q failed: %v\n%s", name, args, err, out)
+		t.Fatalf("generated project command go %q failed: %v\n%s", args, err, out)
 	}
 }
 

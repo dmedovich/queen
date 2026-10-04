@@ -22,6 +22,7 @@ type checkSummary struct {
 	failed   int
 	exitCode int
 	output   io.Writer
+	writeErr error
 }
 
 func runPipelineChecks(ctx context.Context, q *queen.Queen, opts checkOptions) checkSummary {
@@ -30,29 +31,29 @@ func runPipelineChecks(ctx context.Context, q *queen.Queen, opts checkOptions) c
 		summary.output = os.Stdout
 	}
 
-	fmt.Fprint(summary.output, "Validating migrations... ")
+	summary.write("Validating migrations... ")
 	if err := q.Validate(ctx); err != nil {
-		fmt.Fprintf(summary.output, "FAIL\n  %v\n", err)
+		summary.write("FAIL\n  %v\n", err)
 		summary.fail(3)
 	} else {
-		fmt.Fprintln(summary.output, "OK")
+		summary.write("OK\n")
 		summary.pass()
 	}
 
-	fmt.Fprint(summary.output, "Checking for gaps... ")
+	summary.write("Checking for gaps... ")
 	gaps, err := q.DetectGaps(ctx)
 	if err != nil {
-		fmt.Fprintf(summary.output, "FAIL\n  %v\n", err)
+		summary.write("FAIL\n  %v\n", err)
 		summary.fail(3)
 	} else if len(gaps) > 0 {
-		fmt.Fprintf(summary.output, "WARNING (%d gaps found)\n", len(gaps))
+		summary.write("WARNING (%d gaps found)\n", len(gaps))
 		if opts.noGaps || opts.ci {
 			summary.fail(4)
 		} else {
 			summary.pass()
 		}
 	} else {
-		fmt.Fprintln(summary.output, "OK")
+		summary.write("OK\n")
 		summary.pass()
 	}
 
@@ -64,12 +65,12 @@ func runPipelineChecks(ctx context.Context, q *queen.Queen, opts checkOptions) c
 		checkRollbackCycle(ctx, q, &summary)
 	}
 
-	fmt.Fprint(summary.output, "Database connectivity... ")
+	summary.write("Database connectivity... ")
 	if _, err := q.Driver().GetApplied(ctx); err != nil {
-		fmt.Fprintf(summary.output, "FAIL\n  %v\n", err)
+		summary.write("FAIL\n  %v\n", err)
 		summary.fail(3)
 	} else {
-		fmt.Fprintln(summary.output, "OK")
+		summary.write("OK\n")
 		summary.pass()
 	}
 
@@ -77,15 +78,11 @@ func runPipelineChecks(ctx context.Context, q *queen.Queen, opts checkOptions) c
 }
 
 func checkRollbackCycle(ctx context.Context, q *queen.Queen, summary *checkSummary) {
-	out := summary.output
-	if out == nil {
-		out = os.Stdout
-	}
-	fmt.Fprint(out, "Testing rollback cycle... ")
+	summary.write("Testing rollback cycle... ")
 
 	statuses, err := q.Status(ctx)
 	if err != nil {
-		fmt.Fprintf(out, "FAIL\n  %v\n", err)
+		summary.write("FAIL\n  %v\n", err)
 		summary.fail(6)
 		return
 	}
@@ -97,46 +94,42 @@ func checkRollbackCycle(ctx context.Context, q *queen.Queen, summary *checkSumma
 		}
 	}
 	if appliedCount > 0 {
-		fmt.Fprintf(out, "FAIL\n  rollback-test requires a clean test database; found %d applied migration(s)\n", appliedCount)
+		summary.write("FAIL\n  rollback-test requires a clean test database; found %d applied migration(s)\n", appliedCount)
 		summary.fail(6)
 		return
 	}
 
 	if len(statuses) == 0 {
-		fmt.Fprintln(out, "FAIL\n  no migrations registered")
+		summary.write("FAIL\n  no migrations registered\n")
 		summary.fail(6)
 		return
 	}
 
 	if err := q.Up(ctx); err != nil {
-		fmt.Fprintf(out, "FAIL\n  apply failed: %v\n", err)
+		summary.write("FAIL\n  apply failed: %v\n", err)
 		summary.fail(6)
 		return
 	}
 	if err := q.Reset(ctx); err != nil {
-		fmt.Fprintf(out, "FAIL\n  rollback failed: %v\n", err)
+		summary.write("FAIL\n  rollback failed: %v\n", err)
 		summary.fail(6)
 		return
 	}
 	if err := q.Up(ctx); err != nil {
-		fmt.Fprintf(out, "FAIL\n  reapply failed: %v\n", err)
+		summary.write("FAIL\n  reapply failed: %v\n", err)
 		summary.fail(6)
 		return
 	}
 
-	fmt.Fprintln(out, "OK")
+	summary.write("OK\n")
 	summary.pass()
 }
 
 func checkPendingMigrations(ctx context.Context, q *queen.Queen, summary *checkSummary) {
-	out := summary.output
-	if out == nil {
-		out = os.Stdout
-	}
-	fmt.Fprint(out, "Checking for pending migrations... ")
+	summary.write("Checking for pending migrations... ")
 	statuses, err := q.Status(ctx)
 	if err != nil {
-		fmt.Fprintf(out, "FAIL\n  %v\n", err)
+		summary.write("FAIL\n  %v\n", err)
 		summary.fail(3)
 		return
 	}
@@ -148,13 +141,24 @@ func checkPendingMigrations(ctx context.Context, q *queen.Queen, summary *checkS
 		}
 	}
 	if pendingCount > 0 {
-		fmt.Fprintf(out, "FAIL (%d pending)\n", pendingCount)
+		summary.write("FAIL (%d pending)\n", pendingCount)
 		summary.fail(5)
 		return
 	}
 
-	fmt.Fprintln(out, "OK")
+	summary.write("OK\n")
 	summary.pass()
+}
+
+func (s *checkSummary) write(format string, args ...any) {
+	if s.writeErr != nil {
+		return
+	}
+	out := s.output
+	if out == nil {
+		out = os.Stdout
+	}
+	_, s.writeErr = fmt.Fprintf(out, format, args...)
 }
 
 func (s *checkSummary) pass() {

@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/base"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // Driver implements the queen.Driver interface for PostgreSQL.
@@ -127,6 +127,7 @@ func (d *Driver) Init(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("inspect migration table: %w", err)
 		}
+		defer func() { _ = rows.Close() }()
 		columns := make(map[string]bool)
 		for rows.Next() {
 			var name string

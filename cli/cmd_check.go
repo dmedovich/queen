@@ -45,6 +45,9 @@ func (app *App) checkCmd() *cobra.Command {
 				options.output = &output
 			}
 			summary := runPipelineChecks(ctx, q, options)
+			if summary.writeErr != nil {
+				return fmt.Errorf("write check output: %w", summary.writeErr)
+			}
 
 			if app.config.JSON {
 				if err := json.NewEncoder(os.Stdout).Encode(checkJSONResult{Passed: summary.passed, Failed: summary.failed, ExitCode: summary.exitCode, Output: output.String()}); err != nil {

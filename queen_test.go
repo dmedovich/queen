@@ -242,7 +242,9 @@ func TestLockUnlockUsesBoundedContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("lock() failed: %v", err)
 	}
-	unlock()
+	if err := unlock(); err != nil {
+		t.Fatalf("unlock() failed: %v", err)
+	}
 
 	if !driver.sawDeadline {
 		t.Fatal("Unlock() did not receive a bounded context")

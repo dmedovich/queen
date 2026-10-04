@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/sqlite"
 	"github.com/dmedovich/queen/tap"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func newTapTestQueen(t *testing.T, sink tap.Sink) (*queen.Queen, func()) {

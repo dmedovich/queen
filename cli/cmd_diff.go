@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen"
+	"github.com/spf13/cobra"
 )
 
 func (app *App) diffCmd() *cobra.Command {

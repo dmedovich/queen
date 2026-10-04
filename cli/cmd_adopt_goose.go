@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/postgres"
+	"github.com/spf13/cobra"
 )
 
 const defaultAdoptionLockTimeout = 30 * time.Minute

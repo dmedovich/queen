@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dmedovich/queen"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"github.com/dmedovich/queen"
 )
 
 func TestPostgresCIPipeline(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen"
+	"github.com/spf13/cobra"
 )
 
 func TestAppGlobalFlags(t *testing.T) {

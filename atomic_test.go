@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/base"
 	"github.com/dmedovich/queen/drivers/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 type txRecorderSQLiteDriver struct {

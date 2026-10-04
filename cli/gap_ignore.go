@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os/user"
 
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen"
+	"github.com/spf13/cobra"
 )
 
 func (app *App) gapIgnoreCmd() *cobra.Command {

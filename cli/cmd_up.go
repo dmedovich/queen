@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/cli/tui/live"
 	"github.com/dmedovich/queen/tap"
+	"github.com/spf13/cobra"
 )
 
 func (app *App) upCmd() *cobra.Command {

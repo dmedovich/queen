@@ -93,7 +93,7 @@ DROP FUNCTION IF EXISTS update_timestamp();`,
 		{name: "env substitution rejected", input: "-- +goose Up\n-- +goose ENVSUB ON\nSELECT '${NAME}';", wantErr: "ENVSUB"},
 		{name: "duplicate up rejected", input: "-- +goose Up\nSELECT 1;\n-- +goose Up\nSELECT 2;", wantErr: "duplicate Up"},
 		{name: "unmatched statement marker rejected", input: "-- +goose Up\n-- +goose StatementBegin\nSELECT 1;", wantErr: "balanced statement markers"},
-		{name: "empty down rejected", input: "-- +goose Up\nSELECT 1;\n-- +goose Down", wantErr: "Down section is empty"},
+		{name: "empty down rejected", input: "-- +goose Up\nSELECT 1;\n-- +goose Down", wantErr: "down section is empty"},
 	}
 
 	for _, tt := range tests {
@@ -195,7 +195,7 @@ func TestImportFromGoose_RejectsUnsupportedInputWithoutOutput(t *testing.T) {
 	for _, tc := range []struct{ name, files, want string }{
 		{"envsub", "-- +goose Up\n-- +goose ENVSUB ON\nSELECT '${NAME}';", "ENVSUB"},
 		{"multi no transaction", "-- +goose NO TRANSACTION\n-- +goose Up\nSELECT 1; SELECT 2;", "multiple SQL statements"},
-		{"empty up", "-- +goose Up\n-- +goose Down\nSELECT 1;", "Up section is empty"},
+		{"empty up", "-- +goose Up\n-- +goose Down\nSELECT 1;", "up section is empty"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sourceDir := t.TempDir()

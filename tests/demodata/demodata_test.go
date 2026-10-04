@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/dmedovich/queen"
 	"github.com/dmedovich/queen/drivers/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestMainTUIDemoStartsWithGapsAndTapReadyPendingMigration(t *testing.T) {

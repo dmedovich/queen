@@ -99,21 +99,8 @@ func buildGooseAdoptionPlan(sourceTable, targetTable string, events []gooseEvent
 		return plan, fmt.Errorf("goose history has no applied migration versions")
 	}
 	sort.Slice(plan.CurrentQueen, func(i, j int) bool { return plan.CurrentQueen[i].Version < plan.CurrentQueen[j].Version })
-	if len(current) != 0 {
-		if len(current) != len(plan.ToAdopt) {
-			return plan, fmt.Errorf("queen history already contains %d records; expected an empty table or the exact %d adopted records", len(current), len(plan.ToAdopt))
-		}
-		byVersion := make(map[string]queenHistoryRow, len(current))
-		for _, entry := range current {
-			byVersion[entry.Version] = entry
-		}
-		for _, migration := range plan.ToAdopt {
-			entry := byVersion[migration.Version]
-			if entry.Version != migration.Version || entry.Name != migration.Name || entry.Checksum != migration.Checksum() || entry.Status != "success" {
-				return plan, fmt.Errorf("queen history differs from Goose adoption at version %s", migration.Version)
-			}
-		}
-		plan.AlreadyDone = true
+	if err := verifyCurrentQueenHistory(&plan, current); err != nil {
+		return plan, err
 	}
 	payload, err := json.Marshal(plan)
 	if err != nil {
@@ -122,6 +109,27 @@ func buildGooseAdoptionPlan(sourceTable, targetTable string, events []gooseEvent
 	hash := sha256.Sum256(payload)
 	plan.Fingerprint = hex.EncodeToString(hash[:])
 	return plan, nil
+}
+
+func verifyCurrentQueenHistory(plan *gooseAdoptionPlan, current []queenHistoryRow) error {
+	if len(current) == 0 {
+		return nil
+	}
+	if len(current) != len(plan.ToAdopt) {
+		return fmt.Errorf("queen history already contains %d records; expected an empty table or the exact %d adopted records", len(current), len(plan.ToAdopt))
+	}
+	byVersion := make(map[string]queenHistoryRow, len(current))
+	for _, entry := range current {
+		byVersion[entry.Version] = entry
+	}
+	for _, migration := range plan.ToAdopt {
+		entry := byVersion[migration.Version]
+		if entry.Version != migration.Version || entry.Name != migration.Name || entry.Checksum != migration.Checksum() || entry.Status != "success" {
+			return fmt.Errorf("queen history differs from Goose adoption at version %s", migration.Version)
+		}
+	}
+	plan.AlreadyDone = true
+	return nil
 }
 
 func quotePostgresTable(name string) (string, error) {
